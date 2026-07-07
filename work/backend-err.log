@@ -1,0 +1,30 @@
+C:\Users\Adryan Silva\Documents\Codex\2026-07-02\quero-que-voc-gere-um-sistema\backend\node_modules\pg-pool\index.js:45
+    Error.captureStackTrace(err)
+          ^
+
+error: autentica��o do tipo senha falhou para o usu�rio "postgres"
+    at C:\Users\Adryan Silva\Documents\Codex\2026-07-02\quero-que-voc-gere-um-sistema\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async query (file:///C:/Users/Adryan%20Silva/Documents/Codex/2026-07-02/quero-que-voc-gere-um-sistema/backend/src/config/db.js:10:18)
+    at async findUserByEmail (file:///C:/Users/Adryan%20Silva/Documents/Codex/2026-07-02/quero-que-voc-gere-um-sistema/backend/src/models/User.js:4:20)
+    at async login (file:///C:/Users/Adryan%20Silva/Documents/Codex/2026-07-02/quero-que-voc-gere-um-sistema/backend/src/controllers/authController.js:20:16) {
+  length: 113,
+  severity: 'FATAL',
+  code: '28P01',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'auth.c',
+  line: '320',
+  routine: 'auth_failed'
+}
+
+Node.js v24.13.0
