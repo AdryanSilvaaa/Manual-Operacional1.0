@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import manualRoutes from './routes/manuals.js';
+import systemRoutes from './routes/systems.js';
 import userRoutes from './routes/users.js';
 
 const app = express();
@@ -20,6 +21,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/systems', systemRoutes);
 app.use('/api/manuals', manualRoutes);
 app.use('/api/users', userRoutes);
 

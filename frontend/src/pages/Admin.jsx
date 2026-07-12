@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, UploadCloud, UsersRound } from 'lucide-react';
+import { Boxes, Check, Pencil, Plus, Trash2, UploadCloud, UsersRound, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const emptySystem = {
+  nome: '',
+  resumo: ''
+};
+
 const emptyManual = {
+  systemId: '',
   titulo: '',
   descricao: '',
   pdf: null,
@@ -12,8 +18,11 @@ const emptyManual = {
 
 export default function Admin() {
   const { apiUrl, token } = useAuth();
+  const [systems, setSystems] = useState([]);
   const [manuals, setManuals] = useState([]);
   const [users, setUsers] = useState([]);
+  const [systemForm, setSystemForm] = useState(emptySystem);
+  const [editingSystem, setEditingSystem] = useState(null);
   const [manualForm, setManualForm] = useState(emptyManual);
   const [userForm, setUserForm] = useState({ nome: '', email: '', senha: '', role: 'usuario' });
   const [message, setMessage] = useState('');
@@ -29,10 +38,12 @@ export default function Admin() {
   }
 
   async function loadData() {
-    const [manualsResponse, usersResponse] = await Promise.all([
+    const [systemsResponse, manualsResponse, usersResponse] = await Promise.all([
+      authorizedFetch('/api/systems'),
       authorizedFetch('/api/manuals'),
       authorizedFetch('/api/users')
     ]);
+    setSystems(await systemsResponse.json());
     setManuals(await manualsResponse.json());
     setUsers(await usersResponse.json());
   }
@@ -41,11 +52,53 @@ export default function Admin() {
     loadData();
   }, []);
 
+  async function handleSystemSubmit(event) {
+    event.preventDefault();
+    setMessage('');
+
+    const response = await authorizedFetch('/api/systems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(systemForm)
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      setMessage(data.message || 'Nao foi possivel cadastrar o sistema');
+      return;
+    }
+
+    setSystemForm(emptySystem);
+    setMessage('Sistema cadastrado com sucesso.');
+    await loadData();
+  }
+
+  async function saveSystemEdit(id) {
+    setMessage('');
+
+    const response = await authorizedFetch(`/api/systems/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editingSystem)
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      setMessage(data.message || 'Nao foi possivel editar o sistema');
+      return;
+    }
+
+    setEditingSystem(null);
+    setMessage('Sistema atualizado com sucesso.');
+    await loadData();
+  }
+
   async function handleManualSubmit(event) {
     event.preventDefault();
     setMessage('');
 
     const formData = new FormData();
+    formData.append('systemId', manualForm.systemId);
     formData.append('titulo', manualForm.titulo);
     formData.append('descricao', manualForm.descricao);
     formData.append('pdf', manualForm.pdf);
@@ -89,6 +142,22 @@ export default function Admin() {
     await loadData();
   }
 
+  async function updateManualSystem(manualId, systemId) {
+    const formData = new FormData();
+    formData.append('systemId', systemId);
+
+    await authorizedFetch(`/api/manuals/${manualId}`, {
+      method: 'PUT',
+      body: formData
+    });
+    await loadData();
+  }
+
+  async function removeSystem(id) {
+    await authorizedFetch(`/api/systems/${id}`, { method: 'DELETE' });
+    await loadData();
+  }
+
   async function removeManual(id) {
     await authorizedFetch(`/api/manuals/${id}`, { method: 'DELETE' });
     await loadData();
@@ -113,17 +182,60 @@ export default function Admin() {
     <section className="admin-page">
       <div className="page-heading">
         <p className="eyebrow">Painel do gerente</p>
-        <h1>Administre manuais e usuarios</h1>
+        <h1>Administre sistemas, manuais e usuarios</h1>
       </div>
 
       {message && <p className="notice">{message}</p>}
 
       <div className="admin-grid">
+        <form className="admin-panel" onSubmit={handleSystemSubmit}>
+          <div className="section-title">
+            <Boxes size={20} />
+            <h2>Novo sistema</h2>
+          </div>
+
+          <label>
+            Nome do sistema
+            <input
+              value={systemForm.nome}
+              onChange={(event) => setSystemForm({ ...systemForm, nome: event.target.value })}
+              required
+            />
+          </label>
+
+          <label>
+            Resumo/legenda
+            <textarea
+              value={systemForm.resumo}
+              onChange={(event) => setSystemForm({ ...systemForm, resumo: event.target.value })}
+            />
+          </label>
+
+          <button className="primary-button" type="submit">
+            <Plus size={18} />
+            Cadastrar sistema
+          </button>
+        </form>
+
         <form className="admin-panel" onSubmit={handleManualSubmit}>
           <div className="section-title">
             <UploadCloud size={20} />
             <h2>Novo manual</h2>
           </div>
+
+          <label>
+            Sistema vinculado
+            <select
+              value={manualForm.systemId}
+              onChange={(event) => setManualForm({ ...manualForm, systemId: event.target.value })}
+              required
+            >
+              <option value="">Selecione um sistema</option>
+              {systems.map((system) => (
+                <option key={system.id} value={system.id}>{system.nome}</option>
+              ))}
+            </select>
+          </label>
 
           <label>
             Titulo
@@ -240,11 +352,66 @@ export default function Admin() {
 
       <div className="management-grid">
         <div className="admin-panel">
+          <h2>Sistemas cadastrados</h2>
+          <div className="table-list">
+            {systems.map((system) => (
+              <div key={system.id} className="table-row table-row-editable">
+                {editingSystem?.id === system.id ? (
+                  <div className="inline-edit">
+                    <input
+                      value={editingSystem.nome}
+                      onChange={(event) => setEditingSystem({ ...editingSystem, nome: event.target.value })}
+                    />
+                    <input
+                      value={editingSystem.resumo || ''}
+                      onChange={(event) => setEditingSystem({ ...editingSystem, resumo: event.target.value })}
+                    />
+                  </div>
+                ) : (
+                  <span>{system.nome} · {system.manuals_count || 0} manuais</span>
+                )}
+
+                <div className="row-actions">
+                  {editingSystem?.id === system.id ? (
+                    <>
+                      <button type="button" aria-label="Salvar sistema" onClick={() => saveSystemEdit(system.id)}>
+                        <Check size={17} />
+                      </button>
+                      <button type="button" aria-label="Cancelar edicao" onClick={() => setEditingSystem(null)}>
+                        <X size={17} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" aria-label="Editar sistema" onClick={() => setEditingSystem(system)}>
+                        <Pencil size={17} />
+                      </button>
+                      <button type="button" aria-label="Remover sistema" onClick={() => removeSystem(system.id)}>
+                        <Trash2 size={17} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="admin-panel">
           <h2>Manuais cadastrados</h2>
           <div className="table-list">
             {manuals.map((manual) => (
-              <div key={manual.id} className="table-row">
+              <div key={manual.id} className="table-row table-row-editable">
                 <span>{manual.titulo}</span>
+                <select
+                  value={manual.system_id || ''}
+                  onChange={(event) => updateManualSystem(manual.id, event.target.value)}
+                >
+                  <option value="">Sem sistema</option>
+                  {systems.map((system) => (
+                    <option key={system.id} value={system.id}>{system.nome}</option>
+                  ))}
+                </select>
                 <button type="button" aria-label="Remover manual" onClick={() => removeManual(manual.id)}>
                   <Trash2 size={17} />
                 </button>

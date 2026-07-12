@@ -6,8 +6,9 @@ Sistema web com React.js no frontend, Node.js + Express no backend e PostgreSQL.
 
 - Login com JWT.
 - Perfil gerente e usuario comum.
-- Gerente cadastra usuarios e manuais com upload de PDF e video.
-- Usuarios visualizam apenas manuais liberados para eles.
+- Gerente cadastra sistemas, usuarios e manuais com upload de PDF e video.
+- Gerente vincula cada manual a um sistema.
+- Usuarios escolhem primeiro um sistema e visualizam apenas os manuais liberados para eles.
 - URLs dos arquivos sao salvas no banco; arquivos ficam no Supabase Storage ou, em desenvolvimento, na pasta `backend/uploads`.
 
 ## Como rodar
@@ -20,6 +21,8 @@ Crie o banco PostgreSQL e execute:
 psql "$DATABASE_URL" -f backend/sql/schema.sql
 psql "$DATABASE_URL" -f backend/sql/seed-admin.sql
 ```
+
+Se o banco ja existia antes da tela de sistemas, rode o `schema.sql` novamente para criar a tabela `systems` e adicionar `system_id` em `manuals`.
 
 Usuario inicial:
 

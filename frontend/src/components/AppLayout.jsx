@@ -20,7 +20,7 @@ export default function AppLayout() {
         </Link>
 
         <nav className="nav">
-          {user && <Link to="/manuais">Manuais</Link>}
+          {user && <Link to="/sistemas">Sistemas</Link>}
           {user?.role === 'gerente' && (
             <Link to="/admin">
               <Shield size={16} />

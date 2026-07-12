@@ -272,6 +272,19 @@ textarea {
   width: 60px;
 }
 
+.system-logo {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.card-meta {
+  color: #0f766e;
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 800;
+  margin-top: 10px;
+}
+
 .manual-card h2,
 .admin-panel h2,
 .video-block h2 {
@@ -301,7 +314,7 @@ textarea {
   border: 1px solid #cfd8e7;
   border-radius: 8px;
   height: min(76vh, 820px);
-  width: 100%;
+  width: 80%;
 }
 
 .video-block {
@@ -379,6 +392,25 @@ legend {
   justify-content: space-between;
   min-height: 52px;
   padding: 10px 12px;
+}
+
+.table-row-editable {
+  align-items: stretch;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(150px, 1fr) auto auto;
+}
+
+.inline-edit {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -2;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(160px, 1fr);
+}
+
+.row-actions {
+  display: inline-flex;
+  gap: 8px;
 }
 
 .table-row button {

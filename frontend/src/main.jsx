@@ -6,6 +6,7 @@ import AppLayout from './components/AppLayout.jsx';
 import Home from './pages/Home.jsx';
 import Login from './components/Login.jsx';
 import Manuais from './pages/Manuais.jsx';
+import Sistemas from './pages/Sistemas.jsx';
 import ManualViewer from './components/ManualViewer.jsx';
 import Admin from './pages/Admin.jsx';
 import './styles.css';
@@ -22,7 +23,7 @@ function ProtectedRoute({ children, role }) {
   }
 
   if (role && user.role !== role) {
-    return <Navigate to="/manuais" replace />;
+    return <Navigate to="/sistemas" replace />;
   }
 
   return children;
@@ -37,7 +38,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route
-              path="/manuais"
+              path="/sistemas"
+              element={
+                <ProtectedRoute>
+                  <Sistemas />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sistemas/:systemId/manuais"
               element={
                 <ProtectedRoute>
                   <Manuais />

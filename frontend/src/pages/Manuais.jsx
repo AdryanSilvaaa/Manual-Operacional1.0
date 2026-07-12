@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
 import CardManual from '../components/CardManual.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function Manuais() {
+  const { systemId } = useParams();
   const { apiUrl, token } = useAuth();
   const [manuals, setManuals] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadManuals() {
-      const response = await fetch(`${apiUrl}/api/manuals`, {
+      const query = systemId ? `?systemId=${systemId}` : '';
+      const response = await fetch(`${apiUrl}/api/manuals${query}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();
@@ -18,13 +22,18 @@ export default function Manuais() {
     }
 
     loadManuals();
-  }, [apiUrl, token]);
+  }, [apiUrl, systemId, token]);
 
   return (
     <section className="page-section">
+      <Link to="/sistemas" className="back-link">
+        <ArrowLeft size={18} />
+        Voltar para sistemas
+      </Link>
+
       <div className="page-heading">
         <p className="eyebrow">Biblioteca</p>
-        <h1>Manuais liberados</h1>
+        <h1>Manuais do sistema</h1>
       </div>
 
       {loading ? (

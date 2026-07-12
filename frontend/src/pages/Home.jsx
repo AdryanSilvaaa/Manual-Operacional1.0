@@ -11,8 +11,8 @@ export default function Home() {
           Acesse tutoriais, PDFs e videos de rotinas internas em um ambiente
           controlado por permissao de usuario.
         </p>
-        <Link to="/manuais" className="primary-button">
-          Ver Manuais
+        <Link to="/sistemas" className="primary-button">
+          Ver Sistemas
           <ArrowRight size={18} />
         </Link>
       </div>

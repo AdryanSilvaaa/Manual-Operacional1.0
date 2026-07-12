@@ -1,12 +1,14 @@
 import { query } from '../config/db.js';
 
-export async function listManualsForUser(user) {
+export async function listManualsForUser(user, systemId = null) {
   if (user.role === 'gerente') {
     const { rows } = await query(
       `SELECT m.*, u.nome AS criado_por_nome
        FROM manuals m
        LEFT JOIN users u ON u.id = m.criado_por
-       ORDER BY m.created_at DESC`
+       WHERE ($1::int IS NULL OR m.system_id = $1)
+       ORDER BY m.created_at DESC`,
+      [systemId]
     );
     return rows;
   }
@@ -16,11 +18,12 @@ export async function listManualsForUser(user) {
      FROM manuals m
      LEFT JOIN permissions p ON p.manual_id = m.id
      LEFT JOIN users u ON u.id = m.criado_por
-     WHERE p.user_id = $1 OR NOT EXISTS (
+     WHERE ($2::int IS NULL OR m.system_id = $2)
+       AND (p.user_id = $1 OR NOT EXISTS (
        SELECT 1 FROM permissions p2 WHERE p2.manual_id = m.id
-     )
+     ))
      ORDER BY m.created_at DESC`,
-    [user.id]
+    [user.id, systemId]
   );
   return rows;
 }
@@ -51,27 +54,29 @@ export async function getManualForUser(id, user) {
   return permission.rowCount > 0 ? manual : null;
 }
 
-export async function createManual({ titulo, descricao, pdfUrl, videoUrl, criadoPor }) {
+export async function createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, criadoPor }) {
   const { rows } = await query(
-    `INSERT INTO manuals (titulo, descricao, pdf_url, video_url, criado_por)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO manuals (titulo, descricao, pdf_url, video_url, system_id, criado_por)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [titulo, descricao, pdfUrl, videoUrl, criadoPor]
+    [titulo, descricao, pdfUrl, videoUrl, systemId, criadoPor]
   );
   return rows[0];
 }
 
-export async function updateManual(id, { titulo, descricao, pdfUrl, videoUrl }) {
+export async function updateManual(id, { titulo, descricao, pdfUrl, videoUrl, systemId }) {
+  const hasSystemId = systemId !== undefined;
   const { rows } = await query(
     `UPDATE manuals
      SET titulo = COALESCE($1, titulo),
          descricao = COALESCE($2, descricao),
          pdf_url = COALESCE($3, pdf_url),
          video_url = COALESCE($4, video_url),
+         system_id = CASE WHEN $5 THEN $6 ELSE system_id END,
          updated_at = NOW()
-     WHERE id = $5
+     WHERE id = $7
      RETURNING *`,
-    [titulo, descricao, pdfUrl, videoUrl, id]
+    [titulo, descricao, pdfUrl, videoUrl, hasSystemId, systemId || null, id]
   );
   return rows[0];
 }

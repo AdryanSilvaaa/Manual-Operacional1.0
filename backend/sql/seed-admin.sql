@@ -8,7 +8,3 @@ VALUES (
   'gerente'
 )
 ON CONFLICT (email) DO NOTHING;
-
-
-
-

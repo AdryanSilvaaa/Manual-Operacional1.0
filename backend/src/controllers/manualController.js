@@ -25,15 +25,16 @@ function parseAllowedUsers(value) {
 }
 
 export async function index(req, res) {
+  const systemId = req.query.systemId || null;
   let manuals;
   try {
-    manuals = await listManualsForUser(req.user);
+    manuals = await listManualsForUser(req.user, systemId);
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
       throw error;
     }
 
-    manuals = demoStore.listManualsForUser(req.user);
+    manuals = demoStore.listManualsForUser(req.user, systemId);
   }
 
   res.json(manuals);
@@ -60,9 +61,10 @@ export async function show(req, res) {
 
 export async function store(req, res) {
   const { titulo, descricao } = req.body;
+  const systemId = req.body.systemId ? Number(req.body.systemId) : null;
 
-  if (!titulo || !req.files?.pdf?.[0] || !req.files?.video?.[0]) {
-    return res.status(400).json({ message: 'Titulo, PDF e video sao obrigatorios' });
+  if (!titulo || !systemId || !req.files?.pdf?.[0] || !req.files?.video?.[0]) {
+    return res.status(400).json({ message: 'Sistema, titulo, PDF e video sao obrigatorios' });
   }
 
   const pdfUrl = await uploadFile(req.files.pdf[0], 'pdfs');
@@ -75,6 +77,7 @@ export async function store(req, res) {
       descricao,
       pdfUrl,
       videoUrl,
+      systemId,
       criadoPor: req.user.id
     });
   } catch (error) {
@@ -87,6 +90,7 @@ export async function store(req, res) {
       descricao,
       pdfUrl,
       videoUrl,
+      systemId,
       criadoPor: req.user.id
     });
   }
@@ -107,6 +111,11 @@ export async function store(req, res) {
 
 export async function update(req, res) {
   const { titulo, descricao } = req.body;
+  const systemId = req.body.systemId === undefined
+    ? undefined
+    : req.body.systemId
+      ? Number(req.body.systemId)
+      : null;
   const pdfUrl = req.files?.pdf?.[0]
     ? await uploadFile(req.files.pdf[0], 'pdfs')
     : null;
@@ -120,7 +129,8 @@ export async function update(req, res) {
       titulo,
       descricao,
       pdfUrl,
-      videoUrl
+      videoUrl,
+      systemId
     });
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
@@ -131,7 +141,8 @@ export async function update(req, res) {
       titulo,
       descricao,
       pdfUrl,
-      videoUrl
+      videoUrl,
+      systemId
     });
   }
 
