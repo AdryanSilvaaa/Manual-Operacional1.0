@@ -45,7 +45,7 @@ export default function ManualViewer() {
 
   return (
     <section className="viewer-page">
-      <Link to="/manuais" className="back-link">
+      <Link to="/sistemas" className="back-link">
         <ArrowLeft size={18} />
         Voltar
       </Link>

@@ -39,7 +39,7 @@ export default function Manuais() {
       {loading ? (
         <p>Carregando...</p>
       ) : manuals.length === 0 ? (
-        <p className="empty-state">Nenhum manual liberado para este perfil.</p>
+        <p className="empty-state">Ainda não há nenhum manual cadastrado para este sistema em seu setor.</p>
       ) : (
         <div className="manual-grid">
           {manuals.map((manual) => (

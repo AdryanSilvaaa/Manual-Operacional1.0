@@ -37,11 +37,11 @@ export function AuthProvider({ children }) {
     loadUser();
   }, [token]);
 
-  async function login(email, senha) {
+  async function login(identificador, senha) {
     const response = await fetch(`${API_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, senha })
+      body: JSON.stringify({ identificador, senha })
     });
 
     const data = await response.json();

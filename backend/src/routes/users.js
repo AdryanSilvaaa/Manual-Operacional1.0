@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { destroy, index } from '../controllers/userController.js';
-import { authenticate, requireManager } from '../middleware/auth.js';
+import { destroy, index, update } from '../controllers/userController.js';
+import { authenticate, requireSupport } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 
 const router = Router();
 
-router.get('/', authenticate, requireManager, asyncHandler(index));
-router.delete('/:id', authenticate, requireManager, asyncHandler(destroy));
+router.get('/', authenticate, requireSupport, asyncHandler(index));
+router.put('/:id', authenticate, requireSupport, asyncHandler(update));
+router.delete('/:id', authenticate, requireSupport, asyncHandler(destroy));
 
 export default router;

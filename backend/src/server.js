@@ -7,6 +7,7 @@ import authRoutes from './routes/auth.js';
 import manualRoutes from './routes/manuals.js';
 import systemRoutes from './routes/systems.js';
 import userRoutes from './routes/users.js';
+import sectorRoutes from './routes/sectors.js';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +25,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/systems', systemRoutes);
 app.use('/api/manuals', manualRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/sectors', sectorRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

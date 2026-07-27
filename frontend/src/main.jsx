@@ -9,9 +9,13 @@ import Manuais from './pages/Manuais.jsx';
 import Sistemas from './pages/Sistemas.jsx';
 import ManualViewer from './components/ManualViewer.jsx';
 import Admin from './pages/Admin.jsx';
+import Usuarios from './pages/Usuarios.jsx';
+import CadastroSistemas from './pages/CadastroSistemas.jsx';
+import CriarManual from './pages/CriarManual.jsx';
+import Setores from './pages/Setores.jsx';
 import './styles.css';
 
-function ProtectedRoute({ children, role }) {
+function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -22,7 +26,7 @@ function ProtectedRoute({ children, role }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (role && user.role !== role) {
+  if (roles && !roles.includes(user.role)) {
     return <Navigate to="/sistemas" replace />;
   }
 
@@ -62,13 +66,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               }
             />
             <Route
-              path="/admin"
+              path="/configuracoes"
               element={
-                <ProtectedRoute role="gerente">
+                <ProtectedRoute roles={['suporte', 'gerente_setor', 'gerente']}>
                   <Admin />
                 </ProtectedRoute>
               }
             />
+            <Route path="/admin" element={<Navigate to="/configuracoes" replace />} />
+            <Route path="/configuracoes/usuarios" element={<ProtectedRoute roles={['suporte', 'gerente']}><Usuarios /></ProtectedRoute>} />
+            <Route path="/configuracoes/sistemas" element={<ProtectedRoute roles={['suporte', 'gerente']}><CadastroSistemas /></ProtectedRoute>} />
+            <Route path="/configuracoes/setores" element={<ProtectedRoute roles={['suporte', 'gerente']}><Setores /></ProtectedRoute>} />
+            <Route path="/configuracoes/manuais" element={<ProtectedRoute roles={['suporte', 'gerente_setor', 'gerente']}><CriarManual /></ProtectedRoute>} />
           </Route>
         </Routes>
       </AuthProvider>
