@@ -2,11 +2,15 @@
   "name": "manual-operacional-backend",
   "version": "1.0.0",
   "description": "API do Manual Operacional Digital",
-  "main": "src/server.js",
+  "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
