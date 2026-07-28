@@ -1,0 +1,29 @@
+# Dependências
+node_modules/
+
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Credenciais do Google Cloud (service account)
+*.pem
+gcp-key.json
+service-account*.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Cobertura de testes
+coverage/
+
+# Uploads locais (protótipo)
+uploads/
+
+# Sistema operacional / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
