@@ -214,10 +214,10 @@
 }
 
 /* VISUALIZAÇÃO DE MANUAL ------------------------------------------------- */
-/* Altura máxima do PDF; altere 76vh ou 820px para ampliar/reduzir o leitor. */
+/* Altura máxima do PDF; altere 90vh ou 1100px para ampliar/reduzir o leitor. */
 .pdf-viewer {
   width: 100%;
-  height: min(76vh, 820px);
+  height: min(90vh, 1100px);
   background: #fff;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
