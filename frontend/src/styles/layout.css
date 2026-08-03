@@ -1,0 +1,152 @@
+/* Layout autenticado: sidebar e topbar. Larguras/alturas globais vêm de tokens.css. */
+/* Estrutura principal: sidebar à esquerda e conteúdo ocupando o espaço restante. */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Impede que conteúdos largos estourem a área disponível ao lado da sidebar. */
+.app-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* O conteúdo principal nunca pode alargar a aplicação ou deslocar a sidebar. */
+.app-content main {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* Estado fechado da sidebar. Largura e tempo de animação vêm de tokens.css. */
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: 0 0 var(--sidebar-collapsed-width);
+  width: var(--sidebar-collapsed-width);
+  height: 100vh;
+  padding: 26px 12px;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(180deg, var(--color-navy), var(--color-navy-deep));
+  flex-direction: column;
+  align-items: center;
+  transition: width var(--transition-normal), padding var(--transition-normal);
+}
+
+/* Estado aberto da sidebar, ativado por mouse ou navegação via teclado. */
+.sidebar:hover,
+.sidebar:focus-within {
+  flex-basis: var(--sidebar-width);
+  width: var(--sidebar-width);
+  padding-inline: 16px;
+}
+
+/* A logo fica invisível enquanto o menu está fechado. */
+.sidebar .brand {
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+  justify-content: center;
+  transition: opacity var(--transition-fast);
+}
+
+/* Revela a logo quando a sidebar está aberta. */
+.sidebar:hover .brand,
+.sidebar:focus-within .brand {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 100ms;
+}
+
+/* Centraliza os links na altura fixa da janela, sem depender da altura da página. */
+.sidebar-nav {
+  display: grid;
+  width: 100%;
+  margin-block: auto;
+  gap: 7px;
+}
+
+/* Aparência dos links enquanto a sidebar está fechada. */
+.sidebar-nav a {
+  display: flex;
+  padding: 13px 0;
+  color: #d9ddff;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: background 200ms, color 200ms, transform 200ms;
+}
+
+/* Esconde os nomes dos links, preservando somente os ícones. */
+.sidebar-nav span {
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity var(--transition-fast);
+}
+
+/* Alinha ícone e nome à esquerda quando o menu abre. */
+.sidebar:hover .sidebar-nav a,
+.sidebar:focus-within .sidebar-nav a {
+  padding-inline: 14px;
+  justify-content: flex-start;
+}
+
+/* Faz os nomes aparecerem depois do início da animação de abertura. */
+.sidebar:hover .sidebar-nav span,
+.sidebar:focus-within .sidebar-nav span {
+  width: auto;
+  opacity: 1;
+  transition-delay: 100ms;
+}
+
+/* Destaque visual do item apontado ou acessado pelo teclado. */
+.sidebar-nav a:hover,
+.sidebar-nav a:focus-visible {
+  color: #fff;
+  background: rgb(255 255 255 / 13%);
+  transform: translateX(3px);
+}
+
+/* Cabeçalho fixo que contém acesso e menu do perfil. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  min-height: var(--topbar-height);
+  padding: 0 36px;
+  background: rgb(255 255 255 / 90%);
+  border-bottom: 1px solid var(--color-border);
+  align-items: center;
+}
+
+/* Empurra a navegação do perfil para a extremidade direita. */
+.topbar-spacer {
+  flex: 1;
+}
+
+/* Agrupa os controles localizados no cabeçalho. */
+.nav {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.nav a,
+.icon-text-button {
+  display: inline-flex;
+  padding: 9px;
+  color: var(--color-navy);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+  font-weight: 700;
+  align-items: center;
+  gap: 8px;
+}

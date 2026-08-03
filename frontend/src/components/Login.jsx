@@ -1,15 +1,22 @@
+/**
+ * Formulário de entrada e redirecionamento inicial conforme o perfil.
+ * Altere campos/validação aqui; a requisição e persistência da sessão ficam em AuthContext.jsx.
+ */
 import { useState } from 'react';
 import { LogIn } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ROLES } from '../constants/roles.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import BrandLogo from './BrandLogo.jsx';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [identificador, setIdentificador] = useState('');
   const [senha, setSenha] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -17,8 +24,10 @@ export default function Login() {
     setError('');
 
     try {
-      const user = await login(email, senha);
-      navigate(user.role === 'gerente' ? '/admin' : '/manuais');
+      const user = await login(identificador, senha);
+      const requestedPage = location.state?.from?.pathname;
+      const defaultPage = user.role === ROLES.MANAGER ? '/configuracoes' : '/sistemas';
+      navigate(requestedPage || defaultPage, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -29,6 +38,7 @@ export default function Login() {
   return (
     <section className="auth-section">
       <form className="auth-card" onSubmit={handleSubmit}>
+        <BrandLogo />
         <div>
           <p className="eyebrow">Acesso seguro</p>
           <h1>Entrar no sistema</h1>
@@ -37,11 +47,10 @@ export default function Login() {
         {error && <p className="alert">{error}</p>}
 
         <label>
-          Email
+          Usuário
           <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            value={identificador}
+            onChange={(event) => setIdentificador(event.target.value)}
             required
           />
         </label>

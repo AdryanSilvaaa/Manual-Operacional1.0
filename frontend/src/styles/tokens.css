@@ -1,0 +1,44 @@
+/* Tokens globais de marca, espaçamento e layout; alterações propagam-se por todo o site. */
+/* Altere esta URL para trocar as famílias ou pesos das fontes em todo o projeto. */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Cor de botões principais, ícones de destaque e detalhes da marca. */
+  --color-primary: #cc3399;
+  /* Cor exibida ao passar o mouse sobre botões principais. */
+  --color-primary-hover: #a8277f;
+  /* Cor de títulos, textos de navegação e início do degradê lateral. */
+  --color-navy: #222a69;
+  /* Cor final do degradê da sidebar; escurece a parte inferior do menu. */
+  --color-navy-deep: #171d4d;
+  /* Cor de links, subtítulos e indicadores informativos. */
+  --color-sky: #00aaff;
+  /* Fundo geral de todas as páginas. */
+  --color-background: #f5f7fc;
+  /* Fundo de cards, formulários, menus e painéis. */
+  --color-surface: #ffffff;
+  /* Cor padrão dos textos de conteúdo. */
+  --color-text: #202746;
+  /* Cor de descrições, dicas e textos secundários. */
+  --color-muted: #6d7591;
+  /* Cor das divisórias e bordas de campos e cards. */
+  --color-border: #e3e7f1;
+  /* Cor das mensagens de confirmação. */
+  --color-success: #198754;
+  /* Cor dos erros e ações de exclusão. */
+  --color-danger: #cf3d5b;
+  /* Intensidade e distância da sombra aplicada em cards e menus. */
+  --shadow-card: 0 12px 30px rgb(34 42 105 / 9%);
+  /* Arredondamento padrão dos cards e painéis maiores. */
+  --radius: 16px;
+  /* Altura do cabeçalho; também participa do cálculo da altura das páginas. */
+  --topbar-height: 72px;
+  /* Largura da sidebar quando o usuário passa o mouse sobre ela. */
+  --sidebar-width: 258px;
+  /* Largura da sidebar fechada, mostrando somente os ícones. */
+  --sidebar-collapsed-width: 76px;
+  /* Velocidade de animações pequenas, como aparecer textos e logos. */
+  --transition-fast: 150ms ease;
+  /* Velocidade de abertura e fechamento da sidebar. */
+  --transition-normal: 250ms ease;
+}

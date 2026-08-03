@@ -4,11 +4,11 @@ Sistema web com React.js no frontend, Node.js + Express no backend e PostgreSQL.
 
 ## Recursos
 
-- Login com JWT.
+- Login com JWT por identificador textual (não exige e-mail).
 - Perfil gerente e usuario comum.
 - Gerente cadastra sistemas, usuarios e manuais com upload de PDF e video.
 - Gerente vincula cada manual a um sistema.
-- Usuarios escolhem primeiro um sistema e visualizam apenas os manuais liberados para eles.
+- Usuários pertencem a setores e visualizam apenas os manuais do seu setor.
 - URLs dos arquivos sao salvas no banco; arquivos ficam no Supabase Storage ou, em desenvolvimento, na pasta `backend/uploads`.
 
 ## Como rodar
@@ -26,7 +26,7 @@ Se o banco ja existia antes da tela de sistemas, rode o `schema.sql` novamente p
 
 Usuario inicial:
 
-- Email: `admin@manual.local`
+- Usuário: `admin` (o e-mail legado `admin@manual.local` também funciona)
 - Senha: `admin123`
 
 ### 2. Backend
@@ -63,10 +63,16 @@ Acesse `http://localhost:5173`.
 
 ```text
 frontend/
+  src/AppRoutes.jsx
   src/components
+  src/constants
   src/context
   src/pages
+  src/styles
+  src/utils
 backend/
+  src/app.js
+  src/server.js
   src/config
   src/controllers
   src/middleware
@@ -74,3 +80,7 @@ backend/
   src/routes
   sql/
 ```
+
+`app.js` configura a API sem iniciar a porta, enquanto `server.js` fica responsável apenas pela inicialização do processo. No frontend, `AppRoutes.jsx` concentra as rotas e `ProtectedRoute.jsx` aplica autenticação e permissões.
+
+Os estilos são carregados por `src/styles.css` e separados em `tokens.css`, `base.css`, `layout.css`, `components.css`, `pages.css` e `responsive.css`.

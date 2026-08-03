@@ -1,28 +1,17 @@
+/**
+ * Orquestra listagem, upload, edição e exclusão de manuais.
+ * Altere validações/ respostas aqui; acesso ao banco em models/Manual.js e arquivos em config/storage.js.
+ */
 import {
   createManual,
   deleteManual,
   getManualForUser,
   listManualsForUser,
-  replaceManualPermissions,
   updateManual
 } from '../models/Manual.js';
 import { uploadFile } from '../config/storage.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
-
-function parseAllowedUsers(value) {
-  if (!value) {
-    return [];
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(Number).filter(Boolean);
-  }
-
-  return String(value)
-    .split(',')
-    .map((id) => Number(id.trim()))
-    .filter(Boolean);
-}
+import { findOrCreateSector, findSectorById } from '../models/Sector.js';
 
 export async function index(req, res) {
   const systemId = req.query.systemId || null;
@@ -60,15 +49,21 @@ export async function show(req, res) {
 }
 
 export async function store(req, res) {
-  const { titulo, descricao } = req.body;
+  const { titulo, descricao, setor } = req.body;
   const systemId = req.body.systemId ? Number(req.body.systemId) : null;
 
-  if (!titulo || !systemId || !req.files?.pdf?.[0] || !req.files?.video?.[0]) {
-    return res.status(400).json({ message: 'Sistema, titulo, PDF e video sao obrigatorios' });
+  // Gerente de setor sempre publica no seu proprio setor, mesmo que o formulario seja alterado.
+  const sectorName = req.user.role === 'gerente_setor'
+    ? (await findSectorById(req.user.sector_id))?.nome
+    : setor;
+
+  if (!titulo || !sectorName || !systemId || !req.files?.pdf?.[0] || !req.files?.video?.[0]) {
+    return res.status(400).json({ message: 'Setor, sistema, titulo, PDF e video sao obrigatorios' });
   }
 
   const pdfUrl = await uploadFile(req.files.pdf[0], 'pdfs');
   const videoUrl = await uploadFile(req.files.video[0], 'videos');
+  const sector = await findOrCreateSector(sectorName);
 
   let manual;
   try {
@@ -78,6 +73,7 @@ export async function store(req, res) {
       pdfUrl,
       videoUrl,
       systemId,
+      sectorId: sector.id,
       criadoPor: req.user.id
     });
   } catch (error) {
@@ -91,26 +87,16 @@ export async function store(req, res) {
       pdfUrl,
       videoUrl,
       systemId,
+      sectorId: sector.id,
       criadoPor: req.user.id
     });
-  }
-
-  const allowedUsers = parseAllowedUsers(req.body.allowedUsers);
-  try {
-    await replaceManualPermissions(manual.id, allowedUsers);
-  } catch (error) {
-    if (!shouldUseDemoStore(error)) {
-      throw error;
-    }
-
-    demoStore.replaceManualPermissions(manual.id, allowedUsers);
   }
 
   res.status(201).json(manual);
 }
 
 export async function update(req, res) {
-  const { titulo, descricao } = req.body;
+  const { titulo, descricao, setor } = req.body;
   const systemId = req.body.systemId === undefined
     ? undefined
     : req.body.systemId
@@ -122,6 +108,7 @@ export async function update(req, res) {
   const videoUrl = req.files?.video?.[0]
     ? await uploadFile(req.files.video[0], 'videos')
     : null;
+  const sector = setor ? await findOrCreateSector(setor) : null;
 
   let manual;
   try {
@@ -130,7 +117,8 @@ export async function update(req, res) {
       descricao,
       pdfUrl,
       videoUrl,
-      systemId
+      systemId,
+      sectorId: sector?.id
     });
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
@@ -142,25 +130,13 @@ export async function update(req, res) {
       descricao,
       pdfUrl,
       videoUrl,
-      systemId
+      systemId,
+      sectorId: sector?.id
     });
   }
 
   if (!manual) {
     return res.status(404).json({ message: 'Manual nao encontrado' });
-  }
-
-  if (req.body.allowedUsers !== undefined) {
-    const allowedUsers = parseAllowedUsers(req.body.allowedUsers);
-    try {
-      await replaceManualPermissions(manual.id, allowedUsers);
-    } catch (error) {
-      if (!shouldUseDemoStore(error)) {
-        throw error;
-      }
-
-      demoStore.replaceManualPermissions(manual.id, allowedUsers);
-    }
   }
 
   res.json(manual);

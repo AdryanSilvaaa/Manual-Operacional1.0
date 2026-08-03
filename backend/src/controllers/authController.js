@@ -1,32 +1,38 @@
+/**
+ * Orquestra login, cadastro administrativo e leitura da sessão atual.
+ * Validações mudam aqui; consultas e gravações de usuário ficam nos models.
+ */
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { createUser, findUserByEmail, findUserById } from '../models/User.js';
+import { createUser, findUserByIdentifier, findUserById } from '../models/User.js';
+import { findOrCreateSector } from '../models/Sector.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 
 function signToken(user) {
   return jwt.sign(
-    { id: user.id, nome: user.nome, email: user.email, role: user.role },
+    { id: user.id, nome: user.nome, role: user.role, sector_id: user.sector_id },
     process.env.JWT_SECRET,
     { expiresIn: '8h' }
   );
 }
 
+// Autentica pelo identificador textual escolhido no cadastro, sem exigir e-mail.
 export async function login(req, res) {
-  const { email, senha } = req.body;
+  const { identificador, senha } = req.body;
 
-  if (!email || !senha) {
-    return res.status(400).json({ message: 'Email e senha sao obrigatorios' });
+  if (!identificador || !senha) {
+    return res.status(400).json({ message: 'Usuario e senha sao obrigatorios' });
   }
 
   let user;
   try {
-    user = await findUserByEmail(email);
+    user = await findUserByIdentifier(identificador);
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
       throw error;
     }
 
-    user = demoStore.findUserByEmail(email);
+    user = demoStore.findUserByIdentifier(identificador);
   }
   const validPassword = user && await bcrypt.compare(senha, user.senha);
 
@@ -37,7 +43,7 @@ export async function login(req, res) {
   const safeUser = {
     id: user.id,
     nome: user.nome,
-    email: user.email,
+    identificador: user.identificador,
     role: user.role
   };
 
@@ -45,26 +51,27 @@ export async function login(req, res) {
 }
 
 export async function registerManagerUser(req, res) {
-  const { nome, email, senha, role = 'usuario' } = req.body;
+  const { nome, identificador, senha, role = 'usuario', setor } = req.body;
 
-  if (!nome || !email || !senha) {
-    return res.status(400).json({ message: 'Nome, email e senha sao obrigatorios' });
+  if (!nome || !identificador || !senha || !setor) {
+    return res.status(400).json({ message: 'Nome, usuario, setor e senha sao obrigatorios' });
   }
 
-  if (!['gerente', 'usuario'].includes(role)) {
+  if (!['suporte', 'gerente_setor', 'usuario'].includes(role)) {
     return res.status(400).json({ message: 'Role invalida' });
   }
 
   const senhaHash = await bcrypt.hash(senha, 10);
+  const sector = await findOrCreateSector(setor);
   let user;
   try {
-    user = await createUser({ nome, email, senhaHash, role });
+    user = await createUser({ nome, identificador, senhaHash, role, sectorId: sector.id });
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
       throw error;
     }
 
-    user = demoStore.createUser({ nome, email, senhaHash, role });
+    user = demoStore.createUser({ nome, identificador, senhaHash, role, sectorId: sector.id, setor: sector.nome });
   }
 
   res.status(201).json(user);

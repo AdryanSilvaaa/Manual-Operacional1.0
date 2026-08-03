@@ -1,3 +1,7 @@
+/**
+ * Busca e exibe o PDF e o vídeo de um manual pelo ID da URL.
+ * Altere os players aqui; dimensões do PDF/vídeo ficam em styles/pages.css.
+ */
 import { useEffect, useState } from 'react';
 import { ArrowLeft, PlaySquare } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
@@ -45,7 +49,7 @@ export default function ManualViewer() {
 
   return (
     <section className="viewer-page">
-      <Link to="/manuais" className="back-link">
+      <Link to="/sistemas" className="back-link">
         <ArrowLeft size={18} />
         Voltar
       </Link>

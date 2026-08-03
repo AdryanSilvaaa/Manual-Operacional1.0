@@ -1,3 +1,7 @@
+/**
+ * Estado global de sessão: token, usuário, login, logout e URL da API.
+ * Altere VITE_API_URL no .env para outro backend; mudanças aqui afetam toda tela autenticada.
+ */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const AuthContext = createContext(null);
@@ -37,11 +41,11 @@ export function AuthProvider({ children }) {
     loadUser();
   }, [token]);
 
-  async function login(email, senha) {
+  async function login(identificador, senha) {
     const response = await fetch(`${API_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, senha })
+      body: JSON.stringify({ identificador, senha })
     });
 
     const data = await response.json();

@@ -1,3 +1,7 @@
+/**
+ * Valida JWT e aplica as permissões reutilizadas pelas rotas.
+ * Alterar os perfis aceitos abaixo muda quem pode acessar cada grupo protegido.
+ */
 import jwt from 'jsonwebtoken';
 
 export function authenticate(req, res, next) {
@@ -16,10 +20,19 @@ export function authenticate(req, res, next) {
   }
 }
 
-export function requireManager(req, res, next) {
-  if (req.user?.role !== 'gerente') {
-    return res.status(403).json({ message: 'Acesso permitido apenas para gerente' });
+// Suporte administra usuarios, setores e sistemas.
+export function requireSupport(req, res, next) {
+  if (!['suporte', 'gerente'].includes(req.user?.role)) {
+    return res.status(403).json({ message: 'Acesso permitido apenas para suporte' });
   }
 
+  next();
+}
+
+// Suporte e gerente de setor podem cadastrar materiais operacionais.
+export function requireManualManager(req, res, next) {
+  if (!['suporte', 'gerente_setor', 'gerente'].includes(req.user?.role)) {
+    return res.status(403).json({ message: 'Acesso permitido apenas para gerente de setor ou suporte' });
+  }
   next();
 }

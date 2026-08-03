@@ -1,3 +1,4 @@
+/** Card de sistema; alterar o link muda a listagem aberta e pages.css controla sua aparência. */
 import { Boxes } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

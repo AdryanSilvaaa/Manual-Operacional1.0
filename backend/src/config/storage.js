@@ -1,3 +1,7 @@
+/**
+ * Salva PDFs e vídeos no Supabase ou, sem credenciais, em backend/uploads.
+ * Altere bucket/pastas aqui para mudar destinos; regras de arquivo ficam em middleware/upload.js.
+ */
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
