@@ -1,3 +1,7 @@
+/**
+ * Consultas e criação idempotente de setores, com fallback de demonstração.
+ * Alterar findOrCreateSector afeta cadastros de usuários e manuais simultaneamente.
+ */
 import { query } from '../config/db.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 

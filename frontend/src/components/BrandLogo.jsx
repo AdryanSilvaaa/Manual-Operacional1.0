@@ -1,4 +1,5 @@
-// Usa a variacao branca em fundos institucionais e azul-escuro em superficies claras.
+// Marca reutilizável; altere os caminhos abaixo para trocar as imagens em todas as telas.
+// Usa a variação branca em fundos institucionais e azul-escuro em superfícies claras.
 export default function BrandLogo({ compact = false, light = false }) {
   const image = light ? '/brand/logo_duplo-Branco.png' : '/brand/logo_duplo-azul escuro.png';
   return <div className={`brand-logo ${compact ? 'brand-logo-compact' : ''}`} aria-label="Plenna Saúde Odonto">

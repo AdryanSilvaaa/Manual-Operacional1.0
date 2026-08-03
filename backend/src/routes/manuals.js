@@ -1,3 +1,4 @@
+/** Endpoints de manuais; a ordem dos middlewares define autenticação, permissão e upload. */
 import { Router } from 'express';
 import { destroy, index, show, store, update } from '../controllers/manualController.js';
 import { authenticate, requireManualManager, requireSupport } from '../middleware/auth.js';

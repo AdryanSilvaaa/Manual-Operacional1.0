@@ -1,3 +1,7 @@
+/**
+ * Lista, atualiza e exclui usuários para a área de suporte.
+ * Altere campos permitidos aqui; SQL e formato persistido ficam em models/User.js.
+ */
 import { deleteUser, listUsers, updateUser } from '../models/User.js';
 import { findOrCreateSector } from '../models/Sector.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';

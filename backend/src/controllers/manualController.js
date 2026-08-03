@@ -1,3 +1,7 @@
+/**
+ * Orquestra listagem, upload, edição e exclusão de manuais.
+ * Altere validações/ respostas aqui; acesso ao banco em models/Manual.js e arquivos em config/storage.js.
+ */
 import {
   createManual,
   deleteManual,

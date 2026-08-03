@@ -1,3 +1,7 @@
+/**
+ * Centraliza a conexão PostgreSQL usada por todos os models.
+ * Alterar DATABASE_URL troca o banco; mudanças em query afetam toda consulta SQL.
+ */
 import pg from 'pg';
 
 const { Pool } = pg;

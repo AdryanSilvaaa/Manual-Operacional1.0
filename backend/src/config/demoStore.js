@@ -1,3 +1,7 @@
+/**
+ * Banco temporário em memória para desenvolvimento quando o PostgreSQL está ausente.
+ * Alterar dados, contadores ou métodos aqui muda somente o modo de demonstração.
+ */
 const ADMIN_PASSWORD_HASH = '$2a$10$aEV41I/MA/qN00fWXu5UCuO/kPA0KT.DG5Br/zho02MdrowLgDIeC';
 
 let nextUserId = 2;

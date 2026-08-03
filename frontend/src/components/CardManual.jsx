@@ -1,3 +1,4 @@
+/** Card de acesso a um manual; altere rota/conteúdo aqui e o visual em styles/pages.css. */
 import { FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

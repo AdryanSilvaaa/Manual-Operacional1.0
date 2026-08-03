@@ -1,3 +1,7 @@
+/**
+ * Orquestra o CRUD dos sistemas que agrupam os manuais.
+ * Altere validações HTTP aqui e consultas/efeitos de exclusão em models/System.js.
+ */
 import {
   createSystem,
   deleteSystem,

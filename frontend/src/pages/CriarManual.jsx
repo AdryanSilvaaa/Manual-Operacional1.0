@@ -1,6 +1,11 @@
+/**
+ * Formulário de upload e vínculo do manual com sistema e setor.
+ * Alterar nomes dos campos exige sincronizar middleware/upload.js e manualController.js.
+ */
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { ROLES } from '../constants/roles.js';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 
 const INITIAL_FORM = { systemId: '', titulo: '', descricao: '', setor: '', pdf: null, video: null };
@@ -12,7 +17,7 @@ export default function CriarManual() {
   const [sectors, setSectors] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [message, setMessage] = useState('');
-  const isSectorManager = user?.role === 'gerente_setor';
+  const isSectorManager = user?.role === ROLES.SECTOR_MANAGER;
 
   useEffect(() => {
     async function loadOptions() {

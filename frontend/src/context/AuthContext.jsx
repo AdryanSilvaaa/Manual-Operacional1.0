@@ -1,3 +1,7 @@
+/**
+ * Estado global de sessão: token, usuário, login, logout e URL da API.
+ * Altere VITE_API_URL no .env para outro backend; mudanças aqui afetam toda tela autenticada.
+ */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const AuthContext = createContext(null);

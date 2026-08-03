@@ -1,0 +1,86 @@
+/*
+ * Regras para celulares e tablets estreitos.
+ * Alterar 760px muda o ponto em que o layout deixa de ser desktop.
+ */
+@media (max-width: 760px) {
+  /* Reduz a altura usada pelo cabeçalho e pelos cálculos de página. */
+  :root {
+    --topbar-height: 58px;
+  }
+
+  /* Coloca sidebar e conteúdo um abaixo do outro. */
+  .app-shell {
+    display: block;
+  }
+
+  /* No celular a sidebar permanece aberta para permitir interação por toque. */
+  .sidebar,
+  .sidebar:hover,
+  .sidebar:focus-within {
+    position: static;
+    display: flex;
+    flex-basis: auto;
+    width: 100%;
+    height: auto;
+    padding: 14px 18px;
+  }
+
+  .sidebar .brand {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Exibe os links horizontalmente e permite rolagem caso não caibam na tela. */
+  .sidebar-nav {
+    display: flex;
+    margin: 14px 0 0;
+    overflow-x: auto;
+    justify-content: center;
+    gap: 5px;
+  }
+
+  .sidebar-nav a,
+  .sidebar:hover .sidebar-nav a,
+  .sidebar:focus-within .sidebar-nav a {
+    padding-inline: 14px;
+    white-space: nowrap;
+    justify-content: center;
+  }
+
+  .sidebar-nav span {
+    width: auto;
+    opacity: 1;
+  }
+
+  .topbar {
+    padding: 0 18px;
+  }
+
+  .brand-logo {
+    max-width: 164px;
+  }
+
+  /* Transforma a apresentação inicial de duas colunas em uma coluna. */
+  .home {
+    padding: 40px 20px;
+    grid-template-columns: 1fr;
+  }
+
+  /* Reduz as margens internas para aproveitar melhor telas pequenas. */
+  .page-section,
+  .admin-page,
+  .viewer-page {
+    padding: 30px 20px 48px;
+  }
+
+  /* Empilha os painéis administrativos. */
+  .admin-grid,
+  .management-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table-row {
+    align-items: flex-start;
+    gap: 10px;
+  }
+}

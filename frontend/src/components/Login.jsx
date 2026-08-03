@@ -1,6 +1,11 @@
+/**
+ * Formulário de entrada e redirecionamento inicial conforme o perfil.
+ * Altere campos/validação aqui; a requisição e persistência da sessão ficam em AuthContext.jsx.
+ */
 import { useState } from 'react';
 import { LogIn } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ROLES } from '../constants/roles.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import BrandLogo from './BrandLogo.jsx';
 
@@ -11,6 +16,7 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -19,7 +25,9 @@ export default function Login() {
 
     try {
       const user = await login(identificador, senha);
-      navigate(user.role === 'gerente' ? '/configuracoes' : '/sistemas');
+      const requestedPage = location.state?.from?.pathname;
+      const defaultPage = user.role === ROLES.MANAGER ? '/configuracoes' : '/sistemas';
+      navigate(requestedPage || defaultPage, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

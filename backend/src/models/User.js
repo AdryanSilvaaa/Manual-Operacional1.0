@@ -1,3 +1,7 @@
+/**
+ * Consultas PostgreSQL de usuários e seus setores.
+ * Alterar SELECT muda dados retornados à API; INSERT/UPDATE/DELETE muda a persistência.
+ */
 import { query } from '../config/db.js';
 
 // Localiza o usuario pelo identificador livre; o e-mail antigo continua aceito na migracao.

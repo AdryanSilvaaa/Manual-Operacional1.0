@@ -1,3 +1,4 @@
+/** Endpoints administrativos de usuários; todos exigem o perfil de suporte. */
 import { Router } from 'express';
 import { destroy, index, update } from '../controllers/userController.js';
 import { authenticate, requireSupport } from '../middleware/auth.js';

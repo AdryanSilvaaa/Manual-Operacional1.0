@@ -1,3 +1,7 @@
+/**
+ * CRUD visual dos sistemas que agrupam manuais.
+ * Altere campos e ações aqui; regras do servidor ficam em backend/controllers/systemController.js.
+ */
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';

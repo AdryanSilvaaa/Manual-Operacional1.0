@@ -1,3 +1,7 @@
+/**
+ * Consultas dos sistemas e contagem de manuais visíveis por perfil/setor.
+ * Alterar filtros desta camada afeta a visibilidade exibida no frontend.
+ */
 import { query } from '../config/db.js';
 
 // Retorna todos os sistemas; apenas a quantidade de manuais considera o setor atual.

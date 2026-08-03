@@ -1,3 +1,7 @@
+/**
+ * CRUD de usuários, perfis e setores acessível ao suporte.
+ * Alterar perfis/campos exige sincronizar roles.js, backend e schema.sql.
+ */
 import { useEffect, useState } from 'react';
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';

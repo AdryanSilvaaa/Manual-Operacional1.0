@@ -1,11 +1,13 @@
+/** Painel de atalhos administrativos; links e perfis visíveis são definidos nesta tela. */
 import { BookOpenCheck, Boxes, Building2, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { FULL_ADMIN_ROLES } from '../constants/roles.js';
 
 // Exibe somente as configuracoes que o perfil atual pode administrar.
 export default function Admin() {
   const { user } = useAuth();
-  const isSupport = ['suporte', 'gerente'].includes(user.role);
+  const isSupport = FULL_ADMIN_ROLES.includes(user.role);
   const items = [
     ...(isSupport ? [
       { to: '/configuracoes/usuarios', icon: UsersRound, title: 'Criar / Alterar Usuários', text: 'Cadastre usuários, perfis e setores.' },

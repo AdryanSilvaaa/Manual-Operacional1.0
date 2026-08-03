@@ -1,3 +1,7 @@
+/**
+ * Configura o recebimento em memória dos campos pdf e video.
+ * Altere fileSize para o limite por arquivo e fields para nomes/quantidades aceitos.
+ */
 import multer from 'multer';
 
 const storage = multer.memoryStorage();

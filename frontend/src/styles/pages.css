@@ -1,0 +1,384 @@
+/* Regras específicas de páginas; procure o título da seção antes de alterar um bloco. */
+/* PÁGINA INICIAL ---------------------------------------------------------- */
+/* Controla as duas colunas e o espaçamento principal da página inicial. */
+.home {
+  display: grid;
+  min-height: calc(100vh - var(--topbar-height));
+  padding: 56px 7vw;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  align-items: center;
+  gap: 48px;
+}
+
+/* Tipografia compartilhada pelos títulos grandes do sistema. */
+.home-content h1,
+.page-heading h1,
+.viewer-header h1,
+.auth-card h1 {
+  margin: 0;
+  color: var(--color-navy);
+  font-family: 'Bebas Neue', sans-serif;
+  font-weight: 400;
+  letter-spacing: 1px;
+  line-height: 0.95;
+}
+
+.home-content h1 {
+  font-size: clamp(52px, 7vw, 88px);
+}
+
+.home-content p {
+  max-width: 680px;
+  color: var(--color-muted);
+  font-size: 18px;
+}
+
+/* Painel de benefícios exibido ao lado do texto inicial. */
+.home-panel {
+  display: grid;
+  padding: 24px;
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  gap: 12px;
+}
+
+.home-panel div {
+  display: flex;
+  min-height: 72px;
+  padding: 16px;
+  color: var(--color-navy);
+  background: #f6f8ff;
+  border-radius: 12px;
+  font-weight: 700;
+  align-items: center;
+  gap: 14px;
+}
+
+.home-panel svg {
+  color: var(--color-primary);
+}
+
+/* LOGIN E CARREGAMENTO --------------------------------------------------- */
+/* Centraliza tanto o formulário de login quanto mensagens de carregamento. */
+.auth-section,
+.center-screen {
+  display: grid;
+  min-height: calc(100vh - var(--topbar-height));
+  padding: 32px;
+  place-items: center;
+}
+
+.auth-card,
+.admin-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.auth-card {
+  display: grid;
+  width: 100%;
+  max-width: 440px;
+  padding: 32px;
+  gap: 18px;
+}
+
+/* ÁREAS INTERNAS ---------------------------------------------------------- */
+/* Padding comum das páginas autenticadas e administrativas. */
+.page-section,
+.admin-page,
+.viewer-page {
+  padding: 42px 6vw 64px;
+}
+
+.page-heading {
+  margin-bottom: 26px;
+}
+
+.page-heading h1,
+.viewer-header h1 {
+  font-size: clamp(38px, 4vw, 56px);
+}
+
+/* CARDS ------------------------------------------------------------------- */
+/* auto-fit adapta a quantidade de cards à largura disponível. */
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  min-width: 0;
+  gap: 20px;
+}
+
+/* Estrutura visual usada tanto por sistemas quanto por manuais. */
+.manual-card {
+  display: grid;
+  min-width: 0;
+  min-height: 210px;
+  overflow: hidden;
+  padding: 22px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  gap: 18px;
+  transition: transform 200ms, box-shadow 200ms, border-color 200ms;
+}
+
+/* Permite que textos longos encolham dentro do grid em vez de alargar o card. */
+.manual-card > div {
+  min-width: 0;
+}
+
+.manual-card:hover {
+  border-color: var(--color-sky);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-4px);
+}
+
+.manual-logo {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  color: var(--color-primary);
+  background: #fceaf7;
+  border-radius: 12px;
+  place-items: center;
+}
+
+.system-logo {
+  color: var(--color-sky);
+  background: #eaf7ff;
+}
+
+.manual-card h2,
+.admin-panel h2,
+.video-block h2 {
+  margin: 0;
+  color: var(--color-navy);
+  font-size: 18px;
+}
+
+/* Títulos ficam em uma linha; palavras extensas terminam visualmente em reticências. */
+.manual-card h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manual-card p,
+.viewer-header p,
+.hint {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+/* Descrições exibem no máximo duas linhas e recebem reticências quando excedem o card. */
+.manual-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.card-meta {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--color-sky);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.viewer-header {
+  min-width: 0;
+  margin-bottom: 24px;
+}
+
+.viewer-header > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Palavras contínuas quebram dentro do visualizador sem criar rolagem horizontal. */
+.viewer-header h1,
+.viewer-header p {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.viewer-header h1 {
+  line-height: 1.05;
+}
+
+/* VISUALIZAÇÃO DE MANUAL ------------------------------------------------- */
+/* Altura máxima do PDF; altere 76vh ou 820px para ampliar/reduzir o leitor. */
+.pdf-viewer {
+  width: 100%;
+  height: min(76vh, 820px);
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.video-block {
+  margin-top: 30px;
+}
+
+.section-title {
+  display: flex;
+  color: var(--color-navy);
+  align-items: center;
+  gap: 10px;
+}
+
+.section-title svg {
+  color: var(--color-primary);
+}
+
+.video-block video {
+  width: 100%;
+  max-height: 620px;
+  margin-top: 12px;
+  background: #111827;
+  border-radius: var(--radius);
+}
+
+/* FORMULÁRIOS ADMINISTRATIVOS -------------------------------------------- */
+/* Distribui painéis administrativos em colunas responsivas. */
+.admin-grid,
+.management-grid {
+  display: grid;
+  margin-top: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.admin-panel {
+  display: grid;
+  padding: 24px;
+  gap: 16px;
+}
+
+/* Limita a largura do formulário de criação de manuais. */
+.manual-form {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+fieldset {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+legend {
+  padding: 0 6px;
+  color: var(--color-navy);
+  font-weight: 800;
+}
+
+.hint {
+  margin: 0 0 8px;
+}
+
+/* CHECKBOXES -------------------------------------------------------------- */
+.checkbox-list {
+  display: grid;
+  gap: 8px;
+}
+
+.checkbox-row {
+  display: flex;
+  font-weight: 600;
+  flex-direction: row;
+  align-items: center;
+}
+
+.checkbox-row input {
+  width: auto;
+  min-height: auto;
+}
+
+/* TABELAS E LISTAGENS ----------------------------------------------------- */
+/* Contêiner das linhas de usuários, setores e sistemas. */
+.table-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  gap: 0;
+}
+
+/* Estrutura padrão de cada registro das listagens administrativas. */
+.table-row {
+  display: flex;
+  min-height: 54px;
+  padding: 10px 12px;
+  background: #fff;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.table-row:nth-child(even) {
+  background: #f7f9ff;
+}
+
+.table-row:last-child {
+  border-bottom: 0;
+}
+
+.table-row span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Layout usado quando uma linha entra no modo de edição. */
+.table-row-editable {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto auto;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.inline-edit,
+.edit-stack {
+  display: grid;
+  flex: 1;
+  grid-column: 1 / -2;
+  gap: 8px;
+}
+
+.inline-edit {
+  grid-template-columns: minmax(120px, 0.8fr) minmax(160px, 1fr);
+}
+
+.row-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+/* Botões pequenos de editar, salvar, cancelar e excluir. */
+.table-row button {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  color: var(--color-danger);
+  background: #fff0f4;
+  border: 0;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  transition: transform 200ms, background 200ms;
+}
+
+.table-row button:hover {
+  background: #ffdce7;
+  transform: translateY(-1px);
+}

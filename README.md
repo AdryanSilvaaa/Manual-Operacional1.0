@@ -63,10 +63,16 @@ Acesse `http://localhost:5173`.
 
 ```text
 frontend/
+  src/AppRoutes.jsx
   src/components
+  src/constants
   src/context
   src/pages
+  src/styles
+  src/utils
 backend/
+  src/app.js
+  src/server.js
   src/config
   src/controllers
   src/middleware
@@ -74,3 +80,7 @@ backend/
   src/routes
   sql/
 ```
+
+`app.js` configura a API sem iniciar a porta, enquanto `server.js` fica responsável apenas pela inicialização do processo. No frontend, `AppRoutes.jsx` concentra as rotas e `ProtectedRoute.jsx` aplica autenticação e permissões.
+
+Os estilos são carregados por `src/styles.css` e separados em `tokens.css`, `base.css`, `layout.css`, `components.css`, `pages.css` e `responsive.css`.

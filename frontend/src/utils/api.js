@@ -1,3 +1,4 @@
+/** Utilitários HTTP compartilhados; mudar cabeçalhos ou erros aqui afeta os formulários administrativos. */
 /**
  * Monta os cabeçalhos autenticados usados pelas páginas administrativas.
  * O Content-Type só é incluído para JSON, nunca para FormData.

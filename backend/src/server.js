@@ -1,44 +1,12 @@
+/**
+ * Entrada do backend: carrega o ambiente e abre a porta HTTP.
+ * Altere PORT no .env para mudar a porta; a configuração da API fica em app.js.
+ */
 import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import authRoutes from './routes/auth.js';
-import manualRoutes from './routes/manuals.js';
-import systemRoutes from './routes/systems.js';
-import userRoutes from './routes/users.js';
-import sectorRoutes from './routes/sectors.js';
+import app from './app.js';
 
-const app = express();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const port = Number(process.env.PORT) || 4000;
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
-app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'Manual Operacional Digital API' });
-});
-
-app.use('/api/auth', authRoutes);
-app.use('/api/systems', systemRoutes);
-app.use('/api/manuals', manualRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/sectors', sectorRoutes);
-
-app.use((err, req, res, next) => {
-  console.error(err);
-  const dbUnavailable = ['28P01', 'ECONNREFUSED', '3D000'].includes(err?.code);
-
-  res.status(err.status || 500).json({
-    message: dbUnavailable
-      ? 'Banco de dados indisponivel ou credenciais incorretas'
-      : err.message || 'Erro interno do servidor'
-  });
-});
-
-const port = process.env.PORT || 4000;
 app.listen(port, () => {
   console.log(`API rodando em http://localhost:${port}`);
 });

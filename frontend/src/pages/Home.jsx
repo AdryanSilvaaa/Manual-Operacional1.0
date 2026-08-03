@@ -1,3 +1,4 @@
+/** Página pública inicial; altere textos e benefícios aqui e o layout em styles/pages.css. */
 import { ArrowRight, ClipboardCheck, FileVideo, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

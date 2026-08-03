@@ -1,3 +1,5 @@
+-- Cria/atualiza o acesso administrativo inicial para ambientes novos.
+-- Alterar identificador ou hash muda a credencial criada na próxima execução deste seed.
 -- Senha inicial: admin123
 -- Hash gerado com bcrypt. Troque a senha depois do primeiro acesso.
 INSERT INTO users (nome, email, identificador, senha, role)

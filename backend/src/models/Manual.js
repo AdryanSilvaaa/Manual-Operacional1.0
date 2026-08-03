@@ -1,3 +1,7 @@
+/**
+ * Consultas e regras de visibilidade dos manuais por perfil, setor e sistema.
+ * Mudanças nos WHERE afetam autorização; mudanças no CRUD afetam os registros persistidos.
+ */
 import { query } from '../config/db.js';
 
 export async function listManualsForUser(user, systemId = null) {

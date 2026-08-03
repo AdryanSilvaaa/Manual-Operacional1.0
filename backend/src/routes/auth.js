@@ -1,3 +1,4 @@
+/** Endpoints de sessão; altere caminhos/middlewares aqui e a lógica em authController.js. */
 import { Router } from 'express';
 import { login, me, registerManagerUser } from '../controllers/authController.js';
 import { authenticate, requireSupport } from '../middleware/auth.js';

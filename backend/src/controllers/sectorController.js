@@ -1,3 +1,7 @@
+/**
+ * Atende a listagem e criação de setores.
+ * Regras de entrada mudam aqui; persistência e reaproveitamento de nomes ficam em models/Sector.js.
+ */
 import { findOrCreateSector, listSectors } from '../models/Sector.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 

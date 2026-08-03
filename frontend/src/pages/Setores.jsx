@@ -1,3 +1,7 @@
+/**
+ * Cadastro simples de setores usado para vincular pessoas e materiais.
+ * Altere o formulário aqui e as regras de persistência no controller/model de setores.
+ */
 import { useEffect, useState } from 'react';
 import { Building2, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';

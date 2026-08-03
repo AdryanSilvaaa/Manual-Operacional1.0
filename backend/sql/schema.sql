@@ -1,3 +1,5 @@
+-- Estrutura e migrações idempotentes do PostgreSQL.
+-- Altere colunas/restrições aqui junto dos models; filtros e índices afetam acesso e desempenho.
 CREATE TABLE IF NOT EXISTS sectors (
   id SERIAL PRIMARY KEY,
   nome VARCHAR(120) NOT NULL UNIQUE,

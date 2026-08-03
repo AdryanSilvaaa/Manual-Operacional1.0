@@ -1,3 +1,7 @@
+/**
+ * Orquestra login, cadastro administrativo e leitura da sessão atual.
+ * Validações mudam aqui; consultas e gravações de usuário ficam nos models.
+ */
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createUser, findUserByIdentifier, findUserById } from '../models/User.js';

@@ -1,3 +1,7 @@
+/**
+ * Valida JWT e aplica as permissões reutilizadas pelas rotas.
+ * Alterar os perfis aceitos abaixo muda quem pode acessar cada grupo protegido.
+ */
 import jwt from 'jsonwebtoken';
 
 export function authenticate(req, res, next) {

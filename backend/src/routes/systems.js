@@ -1,3 +1,4 @@
+/** Endpoints de sistemas; leitura é autenticada e gravações exigem suporte. */
 import { Router } from 'express';
 import { destroy, index, store, update } from '../controllers/systemController.js';
 import { authenticate, requireSupport } from '../middleware/auth.js';
