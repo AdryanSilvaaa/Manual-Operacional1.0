@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
+import BackButton from '../components/BackButton.jsx';
 
 const INITIAL_FORM = { nome: '', resumo: '' };
 
@@ -51,6 +52,7 @@ export default function CadastroSistemas() {
   }
 
   return <section className="admin-page">
+    <BackButton fallback="/configuracoes" />
     <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Cadastrar Sistemas</h1></div>
     {message && <p className="notice">{message}</p>}
     <div className="admin-grid">

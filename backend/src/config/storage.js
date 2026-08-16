@@ -19,14 +19,30 @@ const supabase = supabaseUrl && supabaseKey
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
+// Alguns PDFs gerados por sistemas externos incluem JavaScript que abre a janela
+// de impressão automaticamente. Mantém o arquivo intacto em tamanho/estrutura,
+// mas troca apenas as chamadas de impressão por uma expressão sem efeito.
+function sanitizePdfBuffer(file) {
+  if (file.mimetype !== 'application/pdf') return file.buffer;
+
+  const source = file.buffer.toString('latin1');
+  const sanitized = source
+    .replaceAll('this.print', 'void      ')
+    .replaceAll('app.execMenuItem("Print")', 'void(0)                  ')
+    .replaceAll("app.execMenuItem('Print')", 'void(0)                  ');
+
+  return sanitized === source ? file.buffer : Buffer.from(sanitized, 'latin1');
+}
+
 export async function uploadFile(file, folder) {
   const extension = path.extname(file.originalname);
   const fileName = `${folder}/${uuid()}${extension}`;
+  const uploadBuffer = sanitizePdfBuffer(file);
 
   if (supabase) {
     const { error } = await supabase.storage
       .from(bucket)
-      .upload(fileName, file.buffer, {
+      .upload(fileName, uploadBuffer, {
         contentType: file.mimetype,
         upsert: false
       });
@@ -43,7 +59,7 @@ export async function uploadFile(file, folder) {
   await fs.mkdir(uploadsDir, { recursive: true });
   const diskName = `${uuid()}${extension}`;
   const diskPath = path.join(uploadsDir, diskName);
-  await fs.writeFile(diskPath, file.buffer);
+  await fs.writeFile(diskPath, uploadBuffer);
 
   return `/uploads/${folder}/${diskName}`;
 }

@@ -4,18 +4,21 @@
  */
 import { Search, X } from 'lucide-react';
 
-export default function SearchField({ value, onChange, placeholder, label }) {
+export default function SearchField({ value, onChange, placeholder, label, id = 'catalog-search', suggestions = [] }) {
+  const suggestionsId = `${id}-suggestions`;
+
   return (
     <div className="search-field" role="search">
       <Search size={20} aria-hidden="true" />
-      <label className="sr-only" htmlFor="catalog-search">{label}</label>
+      <label className="sr-only" htmlFor={id}>{label}</label>
       <input
-        id="catalog-search"
+        id={id}
         type="search"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         autoComplete="off"
+        list={suggestions.length ? suggestionsId : undefined}
       />
       {value && (
         <button
@@ -27,6 +30,11 @@ export default function SearchField({ value, onChange, placeholder, label }) {
         >
           <X size={18} aria-hidden="true" />
         </button>
+      )}
+      {suggestions.length > 0 && (
+        <datalist id={suggestionsId}>
+          {suggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+        </datalist>
       )}
     </div>
   );

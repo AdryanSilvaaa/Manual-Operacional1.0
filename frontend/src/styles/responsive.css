@@ -83,4 +83,18 @@
     align-items: flex-start;
     gap: 10px;
   }
+
+  .metric-grid,
+  .dashboard-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-progress-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bar-row {
+    grid-template-columns: 90px 1fr 40px;
+  }
 }

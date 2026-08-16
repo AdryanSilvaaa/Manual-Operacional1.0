@@ -57,3 +57,7 @@ export async function updateUser(id, { nome, identificador, role, sectorId }) {
 export async function deleteUser(id) {
   await query('DELETE FROM users WHERE id = $1', [id]);
 }
+
+export async function updatePassword(id, passwordHash) {
+  await query('UPDATE users SET senha = $1 WHERE id = $2', [passwordHash, id]);
+}

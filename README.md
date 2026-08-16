@@ -2,6 +2,15 @@
 
 Sistema web com React.js no frontend, Node.js + Express no backend e PostgreSQL.
 
+## Documentação
+
+- [Índice da documentação](docs/README.md)
+- [Visão geral do projeto](docs/PROJETO.md)
+- [Instalação e operação](docs/INSTALACAO-E-OPERACAO.md)
+- [Referência da API](docs/API.md)
+- [Especificação OpenAPI](docs/openapi.yaml)
+- [Banco de dados](docs/BANCO-DE-DADOS.md)
+
 ## Recursos
 
 - Login com JWT por identificador textual (não exige e-mail).
@@ -9,6 +18,11 @@ Sistema web com React.js no frontend, Node.js + Express no backend e PostgreSQL.
 - Gerente cadastra sistemas, usuarios e manuais com upload de PDF e video.
 - Gerente vincula cada manual a um sistema.
 - Usuários pertencem a setores e visualizam apenas os manuais do seu setor.
+- Painel gerencial com conclusão por manual e detalhamento por operador.
+- Progresso de vídeo registrado pelo tempo efetivamente assistido e confirmação de leitura do PDF.
+- Leitor PDF paginado com retomada, páginas visitadas e conclusão real do documento.
+- Prazos, versões arquivadas, questionários com nota mínima e exportação CSV do painel.
+- Troca de senha, bloqueio de tentativas de login e trilha de auditoria.
 - URLs dos arquivos sao salvas no banco; arquivos ficam no Supabase Storage ou, em desenvolvimento, na pasta `backend/uploads`.
 
 ## Como rodar
@@ -22,7 +36,7 @@ psql "$DATABASE_URL" -f backend/sql/schema.sql
 psql "$DATABASE_URL" -f backend/sql/seed-admin.sql
 ```
 
-Se o banco ja existia antes da tela de sistemas, rode o `schema.sql` novamente para criar a tabela `systems` e adicionar `system_id` em `manuals`.
+Em instalações existentes, rode o `schema.sql` novamente para aplicar as migrações idempotentes, incluindo a tabela `manual_progress` usada pelo painel de acompanhamento.
 
 Usuario inicial:
 

@@ -246,6 +246,131 @@
   border-radius: var(--radius);
 }
 
+.pdf-reader { overflow: hidden; background: #30343b; border: 1px solid var(--color-border); border-radius: var(--radius); }
+.pdf-toolbar { position: sticky; top: 0; z-index: 2; display: flex; padding: 12px 16px; color: #fff; background: #222731; align-items: center; justify-content: center; gap: 20px; }
+.pdf-toolbar button { display: inline-flex; padding: 8px 12px; color: #fff; background: #3b4250; border: 0; border-radius: 8px; align-items: center; gap: 6px; }
+.pdf-toolbar button:disabled { opacity: .4; cursor: not-allowed; }
+.pdf-canvas-wrap { display: grid; min-height: 500px; padding: 20px 16px; overflow: auto; place-items: start center; }
+.pdf-canvas-wrap canvas { display: block; max-width: 100%; background: #fff; box-shadow: 0 5px 22px rgb(0 0 0 / 30%); }
+.pdf-reader-state { display: flex; min-height: 420px; align-items: center; justify-content: center; gap: 10px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.manual-progress-panel,
+.manual-complete {
+  display: flex;
+  margin-top: 14px;
+  padding: 16px 18px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.manual-progress-panel > div,
+.manual-complete {
+  color: var(--color-navy);
+  align-items: center;
+  gap: 9px;
+}
+
+.manual-progress-panel > div { display: flex; }
+.manual-progress-panel strong { color: var(--color-success); }
+.manual-complete { color: var(--color-success); font-weight: 800; justify-content: center; }
+
+.video-progress {
+  display: grid;
+  margin-top: 12px;
+  grid-template-columns: auto minmax(120px, 1fr) 42px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.video-progress > div,
+.bar-track {
+  height: 10px;
+  overflow: hidden;
+  background: #e9edf6;
+  border-radius: 99px;
+}
+
+.video-progress i,
+.bar-track i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-sky), var(--color-primary));
+  border-radius: inherit;
+}
+
+/* PAINEL DE USO ---------------------------------------------------------- */
+.dashboard-filters,
+.metric-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.dashboard-filters {
+  margin-bottom: 20px;
+  grid-template-columns: repeat(2, minmax(180px, 320px));
+}
+.export-button { align-self: end; }
+.card-progress { display: flex; margin-top: 12px; color: var(--color-navy); justify-content: space-between; font-size: 12px; font-weight: 800; }
+.manual-card small { display: block; margin-top: 8px; color: var(--color-muted); }
+.quiz-editor { display: grid; margin: 12px 0; padding: 14px; background: #f7f9ff; border-radius: 10px; gap: 10px; }
+.secondary-button { padding: 9px 12px; color: var(--color-navy); background: #eef1f8; border: 0; border-radius: 8px; font-weight: 700; }
+.quiz-form fieldset { display: grid; margin-bottom: 14px; gap: 8px; }
+.quiz-option { display: flex; font-weight: 500; flex-direction: row; align-items: center; }
+.quiz-option input { width: auto; min-height: auto; }
+
+.dashboard-filters .search-field {
+  max-width: none;
+  min-height: 44px;
+  margin: 0;
+}
+
+.metric-grid {
+  margin-bottom: 20px;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
+.metric-card,
+.dashboard-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.metric-card {
+  display: flex;
+  padding: 20px;
+  color: var(--color-primary);
+  align-items: center;
+  gap: 14px;
+}
+
+.metric-card div { display: grid; gap: 3px; }
+.metric-card strong { color: var(--color-navy); font-size: 26px; }
+.metric-card span { color: var(--color-muted); font-size: 12px; font-weight: 700; }
+.dashboard-panel { margin-top: 20px; padding: 24px; }
+.dashboard-panel h2 { margin: 0 0 20px; color: var(--color-navy); font-size: 18px; }
+.bar-chart { display: grid; gap: 15px; }
+.bar-row { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 44px; align-items: center; gap: 14px; font-size: 13px; }
+.bar-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.report-table-wrap { overflow-x: auto; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.report-table th, .report-table td { padding: 12px 10px; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; }
+.report-table th { color: var(--color-navy); background: #f7f9ff; }
+.status-pill { display: inline-flex; padding: 5px 8px; border-radius: 99px; font-weight: 800; }
+.status-concluido { color: var(--color-success); background: #eaf8f1; }
+.status-em-andamento { color: #9a6500; background: #fff6d8; }
+.status-nao-iniciado { color: var(--color-muted); background: #edf0f6; }
+
 /* FORMULÁRIOS ADMINISTRATIVOS -------------------------------------------- */
 /* Distribui painéis administrativos em colunas responsivas. */
 .admin-grid,

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Building2, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
+import BackButton from '../components/BackButton.jsx';
 
 /** Permite ao suporte manter a lista de setores corporativos. */
 export default function Setores() {
@@ -48,6 +49,7 @@ export default function Setores() {
 
   return (
     <section className="admin-page">
+      <BackButton fallback="/configuracoes" />
       <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Cadastrar Setor</h1></div>
       {message && <p className="notice">{message}</p>}
       <div className="admin-grid">

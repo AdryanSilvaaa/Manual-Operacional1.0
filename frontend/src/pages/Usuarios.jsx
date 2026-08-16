@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
+import BackButton from '../components/BackButton.jsx';
 
 const INITIAL_FORM = { nome: '', identificador: '', senha: '', role: 'usuario', setor: '' };
 const PROFILE_OPTIONS = [
@@ -86,6 +87,7 @@ export default function Usuarios() {
   }
 
   return <section className="admin-page">
+    <BackButton fallback="/configuracoes" />
     <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Criar / Alterar Usuários</h1></div>
     {message && <p className="notice">{message}</p>}
     <div className="admin-grid">

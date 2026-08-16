@@ -1,8 +1,8 @@
 /** Lista os manuais visíveis de um sistema; filtros de autorização pertencem ao backend. */
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import CardManual from '../components/CardManual.jsx';
+import BackButton from '../components/BackButton.jsx';
 import SearchField from '../components/SearchField.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { matchesSearch } from '../utils/search.js';
@@ -36,10 +36,7 @@ export default function Manuais() {
 
   return (
     <section className="page-section">
-      <Link to="/sistemas" className="back-link">
-        <ArrowLeft size={18} />
-        Voltar para sistemas
-      </Link>
+      <BackButton fallback="/sistemas" label="Voltar para sistemas" />
 
       <div className="page-heading">
         <p className="eyebrow">Biblioteca</p>

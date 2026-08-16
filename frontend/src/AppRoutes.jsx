@@ -16,6 +16,8 @@ import Manuais from './pages/Manuais.jsx';
 import Setores from './pages/Setores.jsx';
 import Sistemas from './pages/Sistemas.jsx';
 import Usuarios from './pages/Usuarios.jsx';
+import PainelUso from './pages/PainelUso.jsx';
+import AlterarSenha from './pages/AlterarSenha.jsx';
 
 function PrivatePage({ children, roles }) {
   return <ProtectedRoute roles={roles}>{children}</ProtectedRoute>;
@@ -35,6 +37,8 @@ export default function AppRoutes() {
         <Route path="configuracoes/sistemas" element={<PrivatePage roles={FULL_ADMIN_ROLES}><CadastroSistemas /></PrivatePage>} />
         <Route path="configuracoes/setores" element={<PrivatePage roles={FULL_ADMIN_ROLES}><Setores /></PrivatePage>} />
         <Route path="configuracoes/manuais" element={<PrivatePage roles={ADMIN_ROLES}><CriarManual /></PrivatePage>} />
+        <Route path="configuracoes/painel-uso" element={<PrivatePage roles={ADMIN_ROLES}><PainelUso /></PrivatePage>} />
+        <Route path="alterar-senha" element={<PrivatePage><AlterarSenha /></PrivatePage>} />
         <Route path="admin" element={<Navigate to="/configuracoes" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

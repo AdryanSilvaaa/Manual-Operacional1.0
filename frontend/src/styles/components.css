@@ -122,7 +122,12 @@
 
 .search-field:focus-within {
   border-color: var(--color-sky);
-  box-shadow: 0 0 0 3px rgb(82 178 221 / 16%);
+  box-shadow: none;
+}
+
+/* O contêiner já indica o foco; evita um segundo halo no input interno. */
+.search-field input:focus {
+  box-shadow: none;
 }
 
 .search-field input {
@@ -219,4 +224,10 @@
   font-weight: 800;
   align-items: center;
   gap: 8px;
+}
+
+.back-button {
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
