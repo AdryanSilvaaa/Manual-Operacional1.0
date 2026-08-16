@@ -110,4 +110,5 @@ Navegador
 - A tabela `permissions` existe, mas a autorização corrente é baseada principalmente no setor.
 - Não existe recuperação de senha por e-mail nem serviço de notificações.
 
+
 <!-- teste -->
