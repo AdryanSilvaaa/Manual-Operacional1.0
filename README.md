@@ -32,11 +32,10 @@ Sistema web com React.js no frontend, Node.js + Express no backend e PostgreSQL.
 Crie o banco PostgreSQL e execute:
 
 ```bash
-psql "$DATABASE_URL" -f backend/sql/schema.sql
-psql "$DATABASE_URL" -f backend/sql/seed-admin.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/sql/schema.sql
 ```
 
-Em instalações existentes, rode o `schema.sql` novamente para aplicar as migrações idempotentes, incluindo a tabela `manual_progress` usada pelo painel de acompanhamento.
+O `schema.sql` contém toda a estrutura, índices, migrações e o usuário inicial. Ele é transacional e pode ser executado novamente para atualizar uma instalação existente.
 
 Usuario inicial:
 
@@ -94,6 +93,10 @@ backend/
   src/routes
   sql/
 ```
+
+## Implantação no Google Cloud
+
+O roteiro para armazenar PDFs e vídeos em um bucket privado, distribuir pelo Cloud CDN e preparar uploads diretos está em [`docs/ARMAZENAMENTO_GOOGLE_CLOUD.md`](docs/ARMAZENAMENTO_GOOGLE_CLOUD.md).
 
 `app.js` configura a API sem iniciar a porta, enquanto `server.js` fica responsável apenas pela inicialização do processo. No frontend, `AppRoutes.jsx` concentra as rotas e `ProtectedRoute.jsx` aplica autenticação e permissões.
 

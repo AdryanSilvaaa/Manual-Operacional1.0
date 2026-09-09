@@ -71,6 +71,9 @@ export async function destroy(req, res) {
   try {
     await deleteSystem(req.params.id);
   } catch (error) {
+    if (error?.code === '23503') {
+      return res.status(409).json({ message: 'Nao e possivel excluir um sistema que possui manuais vinculados' });
+    }
     if (!shouldUseDemoStore(error)) {
       throw error;
     }

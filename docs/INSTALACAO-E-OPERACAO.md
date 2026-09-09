@@ -14,16 +14,15 @@ Crie o banco e execute o schema. O arquivo é idempotente e também serve como m
 
 ```powershell
 $env:DATABASE_URL='postgres://postgres:senha@localhost:5432/manual_operacional'
-psql "$env:DATABASE_URL" -f backend/sql/schema.sql
-psql "$env:DATABASE_URL" -f backend/sql/seed-admin.sql
+psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/sql/schema.sql
 ```
 
-Conta inicial do seed:
+Conta inicial criada pelo schema:
 
 - Identificador: `admin`
 - Senha: `admin123`
 
-Essa senha não atende à política aplicada a novos usuários e deve ser alterada após o primeiro acesso.
+Troque essa senha após o primeiro acesso, especialmente em produção.
 
 ## Backend
 
@@ -121,4 +120,3 @@ Com `DEV_DEMO_MODE=true`, erros de indisponibilidade do PostgreSQL habilitam dad
 - **CORS**: confirme `FRONTEND_URL` exatamente com protocolo e porta.
 - **Upload local não abre**: confira permissões e a pasta `backend/uploads`.
 - **PDF não atualiza progresso**: confirme que o backend foi reiniciado e o `schema.sql` aplicado.
-

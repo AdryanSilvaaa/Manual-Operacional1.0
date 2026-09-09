@@ -7,9 +7,9 @@ import {
   deleteManual,
   getManualForUser,
   listManualsForUser,
-  updateManual
+  updateManual,
+  archiveAndUpdateManual
 } from '../models/Manual.js';
-import { archiveCurrentVersion } from '../models/Manual.js';
 import { uploadFile } from '../config/storage.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import { findOrCreateSector, findSectorById } from '../models/Sector.js';
@@ -125,8 +125,7 @@ export async function update(req, res) {
 
   let manual;
   try {
-    if (pdfUrl || videoUrl) await archiveCurrentVersion(req.params.id);
-    manual = await updateManual(req.params.id, {
+    const updateData = {
       titulo,
       descricao,
       pdfUrl,
@@ -135,7 +134,10 @@ export async function update(req, res) {
       sectorId: sector?.id,
       dueAt,
       active
-    });
+    };
+    manual = pdfUrl || videoUrl
+      ? await archiveAndUpdateManual(req.params.id, updateData)
+      : await updateManual(req.params.id, updateData);
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
       throw error;

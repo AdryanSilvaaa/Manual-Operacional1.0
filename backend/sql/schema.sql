@@ -1,29 +1,31 @@
--- Estrutura e migrações idempotentes do PostgreSQL.
--- Altere colunas/restrições aqui junto dos models; filtros e índices afetam acesso e desempenho.
+-- Manual Operacional Digital - banco PostgreSQL completo
+-- Execute: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/sql/schema.sql
+-- O script é transacional e pode ser reexecutado para atualizar instalações antigas.
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS sectors (
   id SERIAL PRIMARY KEY,
   nome VARCHAR(120) NOT NULL UNIQUE,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS systems (
+  id SERIAL PRIMARY KEY,
+  nome VARCHAR(160) NOT NULL,
+  resumo TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   nome VARCHAR(120) NOT NULL,
   email VARCHAR(160) UNIQUE,
-  identificador VARCHAR(160) UNIQUE,
+  identificador VARCHAR(160),
   senha TEXT NOT NULL,
-  role VARCHAR(20) NOT NULL CHECK (role IN ('suporte', 'gerente_setor', 'usuario')),
-  sector_id INTEGER REFERENCES sectors(id) ON DELETE SET NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
-
-CREATE TABLE IF NOT EXISTS systems (
-  id SERIAL PRIMARY KEY,
-  nome VARCHAR(160) NOT NULL,
-  resumo TEXT,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  role VARCHAR(20) NOT NULL,
+  sector_id INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS manuals (
@@ -32,46 +34,72 @@ CREATE TABLE IF NOT EXISTS manuals (
   descricao TEXT,
   pdf_url TEXT NOT NULL,
   video_url TEXT NOT NULL,
-  system_id INTEGER REFERENCES systems(id) ON DELETE SET NULL,
-  sector_id INTEGER REFERENCES sectors(id) ON DELETE RESTRICT,
-  criado_por INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  system_id INTEGER,
+  sector_id INTEGER,
+  criado_por INTEGER,
+  version INTEGER NOT NULL DEFAULT 1,
+  due_at TIMESTAMPTZ,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE manuals
-ADD COLUMN IF NOT EXISTS system_id INTEGER REFERENCES systems(id) ON DELETE SET NULL;
-
+-- Colunas introduzidas depois da primeira versão.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS identificador VARCHAR(160);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS sector_id INTEGER REFERENCES sectors(id) ON DELETE SET NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sector_id INTEGER;
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE manuals ADD COLUMN IF NOT EXISTS system_id INTEGER;
+ALTER TABLE manuals ADD COLUMN IF NOT EXISTS sector_id INTEGER;
+ALTER TABLE manuals ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE manuals ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ;
+ALTER TABLE manuals ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 
--- Migra o perfil legado de gerente para suporte, que possui administracao completa.
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE users ADD CONSTRAINT users_role_check
-CHECK (role IN ('suporte', 'gerente_setor', 'usuario'));
-UPDATE users SET role = 'suporte' WHERE role = 'gerente';
-
-ALTER TABLE manuals ADD COLUMN IF NOT EXISTS sector_id INTEGER REFERENCES sectors(id) ON DELETE RESTRICT;
-
--- Mantem os registros ja existentes utilizaveis apos a migracao para setores.
+-- Destinos neutros para relacionamentos ausentes em registros legados.
 INSERT INTO sectors (nome) VALUES ('Geral') ON CONFLICT (nome) DO NOTHING;
-UPDATE users SET identificador = email WHERE identificador IS NULL AND email IS NOT NULL;
-UPDATE users SET sector_id = (SELECT id FROM sectors WHERE nome = 'Geral')
-WHERE sector_id IS NULL AND role = 'usuario';
-UPDATE manuals SET sector_id = (SELECT id FROM sectors WHERE nome = 'Geral')
+INSERT INTO systems (nome, resumo)
+SELECT 'Geral', 'Sistema padrão para dados migrados'
+WHERE NOT EXISTS (SELECT 1 FROM systems WHERE nome = 'Geral');
+
+-- Converte o perfil legado antes de aplicar a nova restrição.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+UPDATE users SET role = 'suporte' WHERE role = 'gerente';
+ALTER TABLE users ADD CONSTRAINT users_role_check
+  CHECK (role IN ('suporte', 'gerente_setor', 'usuario'));
+
+UPDATE users
+SET identificador = COALESCE(NULLIF(BTRIM(email), ''), 'usuario_' || id)
+WHERE identificador IS NULL OR BTRIM(identificador) = '';
+
+UPDATE users
+SET sector_id = (SELECT id FROM sectors WHERE nome = 'Geral')
+WHERE sector_id IS NULL AND role IN ('usuario', 'gerente_setor');
+
+UPDATE manuals
+SET sector_id = (SELECT id FROM sectors WHERE nome = 'Geral')
 WHERE sector_id IS NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identificador_unique
-ON users (identificador) WHERE identificador IS NOT NULL;
+UPDATE manuals
+SET system_id = (SELECT id FROM systems WHERE nome = 'Geral' ORDER BY id LIMIT 1)
+WHERE system_id IS NULL;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_sector_id_fkey') THEN
-    ALTER TABLE users ADD CONSTRAINT users_sector_id_fkey
-    FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE SET NULL;
-  END IF;
-END $$;
+ALTER TABLE users ALTER COLUMN identificador SET NOT NULL;
+ALTER TABLE manuals ALTER COLUMN system_id SET NOT NULL;
+ALTER TABLE manuals ALTER COLUMN sector_id SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identificador_unique ON users (identificador);
+
+-- Relações explícitas e compatíveis com as regras da aplicação.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_sector_id_fkey;
+ALTER TABLE users ADD CONSTRAINT users_sector_id_fkey
+  FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE SET NULL;
+ALTER TABLE manuals DROP CONSTRAINT IF EXISTS manuals_system_id_fkey;
+ALTER TABLE manuals ADD CONSTRAINT manuals_system_id_fkey
+  FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE RESTRICT;
+ALTER TABLE manuals DROP CONSTRAINT IF EXISTS manuals_sector_id_fkey;
+ALTER TABLE manuals ADD CONSTRAINT manuals_sector_id_fkey
+  FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE RESTRICT;
+ALTER TABLE manuals DROP CONSTRAINT IF EXISTS manuals_criado_por_fkey;
+ALTER TABLE manuals ADD CONSTRAINT manuals_criado_por_fkey
+  FOREIGN KEY (criado_por) REFERENCES users(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS permissions (
   id SERIAL PRIMARY KEY,
@@ -80,31 +108,20 @@ CREATE TABLE IF NOT EXISTS permissions (
   UNIQUE (user_id, manual_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON permissions(user_id);
-CREATE INDEX IF NOT EXISTS idx_permissions_manual_id ON permissions(manual_id);
-CREATE INDEX IF NOT EXISTS idx_manuals_system_id ON manuals(system_id);
-CREATE INDEX IF NOT EXISTS idx_manuals_sector_id ON manuals(sector_id);
-CREATE INDEX IF NOT EXISTS idx_users_sector_id ON users(sector_id);
-
 CREATE TABLE IF NOT EXISTS manual_progress (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
   pdf_completed BOOLEAN NOT NULL DEFAULT FALSE,
   video_progress NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (video_progress BETWEEN 0 AND 100),
-  total_seconds INTEGER NOT NULL DEFAULT 0,
-  first_access_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  last_access_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  completed_at TIMESTAMP,
+  total_seconds INTEGER NOT NULL DEFAULT 0 CHECK (total_seconds >= 0),
+  page_count INTEGER NOT NULL DEFAULT 0 CHECK (page_count >= 0),
+  last_page INTEGER NOT NULL DEFAULT 0 CHECK (last_page >= 0),
+  pages_viewed INTEGER[] NOT NULL DEFAULT '{}',
+  first_access_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_access_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
   PRIMARY KEY (user_id, manual_id)
 );
-
-CREATE INDEX IF NOT EXISTS idx_manual_progress_manual_id ON manual_progress(manual_id);
-CREATE INDEX IF NOT EXISTS idx_manual_progress_completed_at ON manual_progress(completed_at);
-
--- Evolução do treinamento: publicação, prazo, versão e acompanhamento real do PDF.
-ALTER TABLE manuals ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE manuals ADD COLUMN IF NOT EXISTS due_at TIMESTAMP;
-ALTER TABLE manuals ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS page_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS last_page INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS pages_viewed INTEGER[] NOT NULL DEFAULT '{}';
@@ -112,20 +129,21 @@ ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS pages_viewed INTEGER[] NOT 
 CREATE TABLE IF NOT EXISTS quiz_questions (
   id SERIAL PRIMARY KEY,
   manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
-  prompt TEXT NOT NULL,
-  options JSONB NOT NULL,
-  correct_option INTEGER NOT NULL,
-  position INTEGER NOT NULL DEFAULT 0
+  prompt TEXT NOT NULL CHECK (BTRIM(prompt) <> ''),
+  options JSONB NOT NULL CHECK (jsonb_typeof(options) = 'array' AND jsonb_array_length(options) >= 2),
+  correct_option INTEGER NOT NULL CHECK (correct_option >= 0 AND correct_option < jsonb_array_length(options)),
+  position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
+  UNIQUE (manual_id, position)
 );
 
 CREATE TABLE IF NOT EXISTS quiz_attempts (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
-  score INTEGER NOT NULL,
+  score INTEGER NOT NULL CHECK (score BETWEEN 0 AND 100),
   passed BOOLEAN NOT NULL,
-  answers JSONB NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  answers JSONB NOT NULL CHECK (jsonb_typeof(answers) IN ('array', 'object')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -134,21 +152,19 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   action VARCHAR(80) NOT NULL,
   entity_type VARCHAR(80),
   entity_id VARCHAR(80),
-  details JSONB NOT NULL DEFAULT '{}',
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  details JSONB NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(details) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 
 CREATE TABLE IF NOT EXISTS manual_version_history (
   id BIGSERIAL PRIMARY KEY,
   manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
-  version INTEGER NOT NULL,
+  version INTEGER NOT NULL CHECK (version > 0),
   titulo VARCHAR(180) NOT NULL,
   descricao TEXT,
   pdf_url TEXT NOT NULL,
   video_url TEXT NOT NULL,
-  archived_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (manual_id, version)
 );
 
@@ -156,7 +172,44 @@ CREATE TABLE IF NOT EXISTS progress_version_history (
   id BIGSERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
-  version INTEGER NOT NULL,
-  snapshot JSONB NOT NULL,
-  archived_at TIMESTAMP NOT NULL DEFAULT NOW()
+  version INTEGER NOT NULL CHECK (version > 0),
+  snapshot JSONB NOT NULL CHECK (jsonb_typeof(snapshot) = 'object'),
+  archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON permissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_permissions_manual_id ON permissions(manual_id);
+CREATE INDEX IF NOT EXISTS idx_manuals_system_id ON manuals(system_id);
+CREATE INDEX IF NOT EXISTS idx_manuals_sector_id ON manuals(sector_id);
+CREATE INDEX IF NOT EXISTS idx_manuals_active ON manuals(active);
+CREATE INDEX IF NOT EXISTS idx_users_sector_id ON users(sector_id);
+CREATE INDEX IF NOT EXISTS idx_manual_progress_manual_id ON manual_progress(manual_id);
+CREATE INDEX IF NOT EXISTS idx_manual_progress_completed_at ON manual_progress(completed_at);
+CREATE INDEX IF NOT EXISTS idx_quiz_questions_manual_id ON quiz_questions(manual_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user_manual ON quiz_attempts(user_id, manual_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_manual_version_history_manual_id ON manual_version_history(manual_id);
+CREATE INDEX IF NOT EXISTS idx_progress_version_history_manual_id ON progress_version_history(manual_id);
+
+-- Acesso inicial: admin / admin123. Troque a senha após o primeiro acesso.
+-- Reexecuções preservam a senha e resolvem contas antigas por e-mail ou identificador.
+DO $$
+DECLARE
+  existing_admin_id INTEGER;
+BEGIN
+  SELECT id INTO existing_admin_id FROM users WHERE email = 'admin@manual.local' LIMIT 1;
+  IF existing_admin_id IS NULL THEN
+    SELECT id INTO existing_admin_id FROM users WHERE identificador = 'admin' LIMIT 1;
+  END IF;
+
+  IF existing_admin_id IS NULL THEN
+    INSERT INTO users (nome, email, identificador, senha, role)
+    VALUES ('Suporte Admin', 'admin@manual.local', 'admin',
+      '$2a$10$aEV41I/MA/qN00fWXu5UCuO/kPA0KT.DG5Br/zho02MdrowLgDIeC', 'suporte');
+  ELSE
+    UPDATE users SET nome = 'Suporte Admin', role = 'suporte'
+    WHERE id = existing_admin_id;
+  END IF;
+END $$;
+
+COMMIT;

@@ -9,7 +9,9 @@ Este diretório reúne a documentação funcional e técnica do projeto.
 | [API.md](API.md) | Referência HTTP detalhada com autenticação, permissões e exemplos |
 | [openapi.yaml](openapi.yaml) | Especificação OpenAPI 3.0 importável em Swagger, Postman e Insomnia |
 | [BANCO-DE-DADOS.md](BANCO-DE-DADOS.md) | Tabelas, relacionamentos, exclusões e versionamento |
+| [TABELAS-DO-BANCO.md](TABELAS-DO-BANCO.md) | Dicionário completo das tabelas, colunas, chaves, índices e regras |
 | [GUIA-TREINAMENTO-E-PAINEL.md](GUIA-TREINAMENTO-E-PAINEL.md) | Regras de progresso, questionários, painel e segurança |
+| [APIs por domínio](apis/README.md) | Um arquivo independente para cada conjunto de endpoints |
 
 ## Leitura recomendada
 
@@ -18,3 +20,13 @@ Este diretório reúne a documentação funcional e técnica do projeto.
 3. Consulte `API.md` durante integrações.
 4. Use `openapi.yaml` para explorar e testar os endpoints visualmente.
 
+## Referência modular das APIs
+
+- [Saúde do serviço](apis/HEALTH.md)
+- [Autenticação e sessão](apis/AUTH.md)
+- [Usuários](apis/USERS.md)
+- [Setores](apis/SECTORS.md)
+- [Sistemas](apis/SYSTEMS.md)
+- [Manuais e uploads](apis/MANUALS.md)
+- [Progresso e painel](apis/PROGRESS.md)
+- [Questionários](apis/QUIZ.md)

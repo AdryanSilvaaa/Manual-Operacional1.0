@@ -7,7 +7,7 @@ import { query } from '../config/db.js';
 // Retorna todos os sistemas; apenas a quantidade de manuais considera o setor atual.
 export async function listSystemsForUser(user) {
   const { rows } = await query(
-    `SELECT s.*, COUNT(m.id) FILTER (WHERE $1 = 'gerente' OR m.sector_id = $2)::int AS manuals_count
+    `SELECT s.*, COUNT(m.id) FILTER (WHERE $1 = 'suporte' OR (m.sector_id = $2 AND m.active = TRUE))::int AS manuals_count
      FROM systems s LEFT JOIN manuals m ON m.system_id = s.id
      GROUP BY s.id ORDER BY s.nome ASC`,
     [user.role, user.sector_id]

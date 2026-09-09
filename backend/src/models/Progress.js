@@ -18,9 +18,9 @@ export async function saveProgress({ userId, manualId, pdfCompleted, videoProgre
   const { rows } = await query(
     `INSERT INTO manual_progress
        (user_id, manual_id, pdf_completed, video_progress, total_seconds, page_count, last_page, pages_viewed)
-     VALUES ($1, $2, FALSE, $4, $5, $6, $7, CASE WHEN $7 > 0 THEN ARRAY[$7] ELSE '{}' END)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $7 > 0 THEN ARRAY[$7] ELSE '{}' END)
      ON CONFLICT (user_id, manual_id) DO UPDATE SET
-       pdf_completed = manual_progress.pdf_completed OR (
+       pdf_completed = manual_progress.pdf_completed OR EXCLUDED.pdf_completed OR (
          GREATEST(manual_progress.page_count, EXCLUDED.page_count) > 0 AND
          cardinality((SELECT ARRAY(SELECT DISTINCT value FROM unnest(manual_progress.pages_viewed || EXCLUDED.pages_viewed) value))) >= GREATEST(manual_progress.page_count, EXCLUDED.page_count)
        ),
@@ -31,7 +31,7 @@ export async function saveProgress({ userId, manualId, pdfCompleted, videoProgre
        last_page = GREATEST(manual_progress.last_page, EXCLUDED.last_page),
        pages_viewed = (SELECT ARRAY(SELECT DISTINCT value FROM unnest(manual_progress.pages_viewed || EXCLUDED.pages_viewed) value ORDER BY value)),
        completed_at = CASE
-         WHEN (manual_progress.pdf_completed OR (
+         WHEN (manual_progress.pdf_completed OR EXCLUDED.pdf_completed OR (
            GREATEST(manual_progress.page_count, EXCLUDED.page_count) > 0 AND
            cardinality((SELECT ARRAY(SELECT DISTINCT value FROM unnest(manual_progress.pages_viewed || EXCLUDED.pages_viewed) value))) >= GREATEST(manual_progress.page_count, EXCLUDED.page_count)
          ))
