@@ -12,8 +12,8 @@ import {
 } from '../models/Manual.js';
 import { uploadFile } from '../config/storage.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
-import { findOrCreateSector, findSectorById } from '../models/Sector.js';
-import { replaceQuestions } from '../models/Quiz.js';
+import { findOrCreateSector, findSectorsByIds } from '../models/Sector.js';
+
 
 export async function index(req, res) {
   const systemId = req.query.systemId || null;
@@ -51,13 +51,19 @@ export async function show(req, res) {
 }
 
 export async function store(req, res) {
-  const { titulo, descricao, setor, dueAt } = req.body;
+  const { titulo, descricao, setor } = req.body;
   const systemId = req.body.systemId ? Number(req.body.systemId) : null;
 
-  // Gerente de setor sempre publica no seu proprio setor, mesmo que o formulario seja alterado.
-  const sectorName = req.user.role === 'gerente_setor'
-    ? (await findSectorById(req.user.sector_id))?.nome
-    : setor;
+  // Gerente de setor so publica em um dos seus setores, mesmo que o formulario seja alterado.
+  let sectorName = setor;
+  if (req.user.role === 'gerente_setor') {
+    const ownSectors = await findSectorsByIds(req.user.sector_ids || []);
+    const chosen = setor
+      ? ownSectors.find((item) => item.nome.toLowerCase() === String(setor).trim().toLowerCase())
+      : ownSectors.length === 1 ? ownSectors[0] : null;
+    if (!chosen) return res.status(400).json({ message: 'Escolha um dos seus setores' });
+    sectorName = chosen.nome;
+  }
 
   if (!titulo || !sectorName || !systemId || !req.files?.pdf?.[0] || !req.files?.video?.[0]) {
     return res.status(400).json({ message: 'Setor, sistema, titulo, PDF e video sao obrigatorios' });
@@ -76,8 +82,7 @@ export async function store(req, res) {
       videoUrl,
       systemId,
       sectorId: sector.id,
-      criadoPor: req.user.id,
-      dueAt
+      criadoPor: req.user.id
     });
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
@@ -91,24 +96,15 @@ export async function store(req, res) {
       videoUrl,
       systemId,
       sectorId: sector.id,
-      criadoPor: req.user.id,
-      dueAt
+      criadoPor: req.user.id
     });
   }
 
-  if (req.body.quiz) {
-    let questions;
-    try { questions = JSON.parse(req.body.quiz); } catch { return res.status(400).json({ message: 'Questionário inválido' }); }
-    if (!Array.isArray(questions) || questions.some((item) => !item.prompt || item.options?.length < 2 || item.correctOption < 0 || item.correctOption >= item.options.length)) {
-      return res.status(400).json({ message: 'Preencha perguntas, alternativas e respostas corretas' });
-    }
-    await replaceQuestions(manual.id, questions);
-  }
   res.status(201).json(manual);
 }
 
 export async function update(req, res) {
-  const { titulo, descricao, setor, dueAt } = req.body;
+  const { titulo, descricao, setor } = req.body;
   const active = req.body.active === undefined ? undefined : String(req.body.active) === 'true';
   const systemId = req.body.systemId === undefined
     ? undefined
@@ -132,7 +128,6 @@ export async function update(req, res) {
       videoUrl,
       systemId,
       sectorId: sector?.id,
-      dueAt,
       active
     };
     manual = pdfUrl || videoUrl

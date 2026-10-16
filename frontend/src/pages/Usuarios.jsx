@@ -7,15 +7,21 @@ import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
+import SearchField from '../components/SearchField.jsx';
 
-const INITIAL_FORM = { nome: '', identificador: '', senha: '', role: 'usuario', setor: '' };
+const INITIAL_FORM = { nome: '', identificador: '', senha: '', role: 'usuario', sectorIds: [] };
 const PROFILE_OPTIONS = [
   { value: 'usuario', label: 'Usuário comum' },
   { value: 'gerente_setor', label: 'Gerente de setor' },
   { value: 'suporte', label: 'Suporte' }
 ];
 
-/** Gerencia usuários, credenciais e o setor que governa seu acesso aos manuais. */
+// Compara nomes sem diferenciar maiúsculas nem acentos ("andre" encontra "André").
+function normalize(text) {
+  return (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+/** Gerencia usuários, credenciais e os setores que governam seu acesso aos manuais e provas. */
 export default function Usuarios() {
   const { apiUrl, token } = useAuth();
   const [users, setUsers] = useState([]);
@@ -23,6 +29,8 @@ export default function Usuarios() {
   const [form, setForm] = useState(INITIAL_FORM);
   const [editingUser, setEditingUser] = useState(null);
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
+  const filteredUsers = users.filter((user) => normalize(user.nome).includes(normalize(search)));
 
   async function loadData() {
     const headers = createAuthHeaders(token);
@@ -53,12 +61,13 @@ export default function Usuarios() {
     } catch (error) { setMessage(error.message); }
   }
 
-  // Salva nome, perfil, identificador e setor do usuário selecionado.
+  // Salva nome, perfil, identificador e setores do usuário selecionado.
   async function handleSave() {
     if (!editingUser) return;
     try {
       const response = await fetch(`${apiUrl}/api/users/${editingUser.id}`, {
-        method: 'PUT', headers: createAuthHeaders(token), body: JSON.stringify(editingUser)
+        method: 'PUT', headers: createAuthHeaders(token),
+        body: JSON.stringify({ nome: editingUser.nome, identificador: editingUser.identificador, role: editingUser.role, sectorIds: editingUser.sectorIds })
       });
       await readResponse(response);
       setEditingUser(null);
@@ -78,8 +87,13 @@ export default function Usuarios() {
     } catch (error) { setMessage(error.message); }
   }
 
-  function SectorInput({ value, onChange }) {
-    return <><input list="sectors" value={value || ''} onChange={(event) => onChange(event.target.value)} required /><datalist id="sectors">{sectors.map((sector) => <option key={sector.id} value={sector.nome} />)}</datalist></>;
+  // Operador e gerente de setor precisam de pelo menos um setor; suporte pode ficar sem nenhum.
+  function SectorPicker({ value, onChange }) {
+    const toggle = (id) => onChange(value.includes(id) ? value.filter((item) => item !== id) : [...value, id]);
+    if (!sectors.length) return <p className="hint">Cadastre os setores em Configurações &gt; Setores.</p>;
+    return <div className="sector-picker">{sectors.map((sector) => <label key={sector.id}>
+      <input type="checkbox" checked={value.includes(sector.id)} onChange={() => toggle(sector.id)} />{sector.nome}
+    </label>)}</div>;
   }
 
   function RoleSelect({ value, onChange }) {
@@ -94,21 +108,27 @@ export default function Usuarios() {
       <form className="admin-panel" onSubmit={handleCreate}>
         <h2>Novo usuário</h2>
         <label>Nome<input value={form.nome} onChange={(event) => updateCreateForm('nome', event.target.value)} required /></label>
-        <label>Usuário para login<input value={form.identificador} onChange={(event) => updateCreateForm('identificador', event.target.value)} required /></label>
-        <label>Setor<SectorInput value={form.setor} onChange={(value) => updateCreateForm('setor', value)} /></label>
-        <label>Senha<input type="password" value={form.senha} onChange={(event) => updateCreateForm('senha', event.target.value)} required /></label>
+        <label>Usuário para login<input value={form.identificador} onChange={(event) => updateCreateForm('identificador', event.target.value)} autoComplete="off" required /></label>
+        <fieldset><legend>Setores</legend><SectorPicker value={form.sectorIds} onChange={(value) => updateCreateForm('sectorIds', value)} /></fieldset>
+        <label>Senha<input type="password" value={form.senha} onChange={(event) => updateCreateForm('senha', event.target.value)} autoComplete="new-password" required /></label>
         <label>Perfil<RoleSelect value={form.role} onChange={(value) => updateCreateForm('role', value)} /></label>
         <button className="primary-button"><Plus size={18} />Cadastrar usuário</button>
       </form>
-      <div className="admin-panel"><h2>Usuários cadastrados</h2><div className="table-list">
-        {users.map((user) => <div className="table-row" key={user.id}>
+      <div className="admin-panel">
+        <div className="panel-header">
+          <h2>Usuários cadastrados</h2>
+          <SearchField id="user-search" value={search} onChange={setSearch} placeholder="Pesquisar por nome" label="Pesquisar usuário por nome" />
+        </div>
+        {search && !filteredUsers.length && <p className="empty-state">Nenhum usuário encontrado com esse nome.</p>}
+        <div className="table-list">
+        {filteredUsers.map((user) => <div className="table-row" key={user.id}>
           {editingUser?.id === user.id ? <div className="edit-stack">
             <input value={editingUser.nome} onChange={(event) => updateEditingUser('nome', event.target.value)} />
             <input value={editingUser.identificador || ''} onChange={(event) => updateEditingUser('identificador', event.target.value)} />
-            <SectorInput value={editingUser.setor} onChange={(value) => updateEditingUser('setor', value)} />
+            <SectorPicker value={editingUser.sectorIds} onChange={(value) => updateEditingUser('sectorIds', value)} />
             <RoleSelect value={editingUser.role} onChange={(value) => updateEditingUser('role', value)} />
-          </div> : <span>{user.nome} · {PROFILE_OPTIONS.find((profile) => profile.value === user.role)?.label || user.role} · {user.setor || 'Sem setor'}</span>}
-          <div className="row-actions">{editingUser?.id === user.id ? <><button type="button" onClick={handleSave} aria-label="Salvar usuário"><Save size={16} /></button><button type="button" onClick={() => setEditingUser(null)} aria-label="Cancelar edição"><X size={16} /></button></> : <><button type="button" onClick={() => setEditingUser({ ...user, setor: user.setor || '' })} aria-label="Editar usuário"><Pencil size={16} /></button><button type="button" onClick={() => handleDelete(user)} aria-label="Remover usuário"><Trash2 size={16} /></button></>}</div>
+          </div> : <span>{user.nome} · {PROFILE_OPTIONS.find((profile) => profile.value === user.role)?.label || user.role} · {user.setores?.length ? user.setores.map((sector) => sector.nome).join(', ') : 'Sem setor'}</span>}
+          <div className="row-actions">{editingUser?.id === user.id ? <><button type="button" onClick={handleSave} aria-label="Salvar usuário"><Save size={16} /></button><button type="button" onClick={() => setEditingUser(null)} aria-label="Cancelar edição"><X size={16} /></button></> : <><button type="button" onClick={() => setEditingUser({ ...user, sectorIds: user.sector_ids || [] })} aria-label="Editar usuário"><Pencil size={16} /></button><button type="button" onClick={() => handleDelete(user)} aria-label="Remover usuário"><Trash2 size={16} /></button></>}</div>
         </div>)}
       </div></div>
     </div>

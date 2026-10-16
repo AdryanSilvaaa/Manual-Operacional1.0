@@ -36,8 +36,6 @@ export async function saveProgress({ userId, manualId, pdfCompleted, videoProgre
            cardinality((SELECT ARRAY(SELECT DISTINCT value FROM unnest(manual_progress.pages_viewed || EXCLUDED.pages_viewed) value))) >= GREATEST(manual_progress.page_count, EXCLUDED.page_count)
          ))
           AND GREATEST(manual_progress.video_progress, EXCLUDED.video_progress) >= 90
-          AND (NOT EXISTS (SELECT 1 FROM quiz_questions qq WHERE qq.manual_id = EXCLUDED.manual_id)
-            OR EXISTS (SELECT 1 FROM quiz_attempts qa WHERE qa.manual_id = EXCLUDED.manual_id AND qa.user_id = EXCLUDED.user_id AND qa.passed))
          THEN COALESCE(manual_progress.completed_at, NOW())
          ELSE manual_progress.completed_at
        END
@@ -48,8 +46,9 @@ export async function saveProgress({ userId, manualId, pdfCompleted, videoProgre
   return rows[0];
 }
 
+// Uma linha por operador e manual dos setores dele; gerente de setor vê só os próprios setores.
 export async function getReport(user) {
-  const sectorFilter = user.role === 'gerente_setor' ? user.sector_id : null;
+  const sectorFilter = user.role === 'gerente_setor' ? user.sector_ids : null;
   const { rows } = await query(
     `SELECT u.id AS user_id, u.nome AS user_name, s.nome AS sector_name,
             m.id AS manual_id, m.titulo AS manual_title,
@@ -59,12 +58,13 @@ export async function getReport(user) {
             COALESCE(mp.total_seconds, 0) AS total_seconds,
             COALESCE(mp.page_count, 0) AS page_count,
             COALESCE(cardinality(mp.pages_viewed), 0) AS pages_read,
-            m.due_at, m.version
+            m.version
      FROM users u
-     JOIN sectors s ON s.id = u.sector_id
-     JOIN manuals m ON m.sector_id = u.sector_id
+     JOIN user_sectors us ON us.user_id = u.id
+     JOIN sectors s ON s.id = us.sector_id
+     JOIN manuals m ON m.sector_id = us.sector_id
      LEFT JOIN manual_progress mp ON mp.user_id = u.id AND mp.manual_id = m.id
-     WHERE u.role = 'usuario' AND ($1::int IS NULL OR u.sector_id = $1)
+     WHERE u.role = 'usuario' AND ($1::int[] IS NULL OR us.sector_id = ANY($1::int[]))
      ORDER BY m.titulo, u.nome`,
     [sectorFilter]
   );

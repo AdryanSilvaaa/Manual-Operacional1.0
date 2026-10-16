@@ -9,5 +9,13 @@ export const ROLES = Object.freeze({
   MANAGER: 'gerente'
 });
 
+// Nomes exibidos nas telas (mesmos da tela de usuários).
+export const ROLE_LABELS = Object.freeze({
+  usuario: 'Usuário comum',
+  gerente_setor: 'Gerente de setor',
+  suporte: 'Suporte',
+  gerente: 'Suporte'
+});
+
 export const ADMIN_ROLES = [ROLES.SUPPORT, ROLES.SECTOR_MANAGER, ROLES.MANAGER];
 export const FULL_ADMIN_ROLES = [ROLES.SUPPORT, ROLES.MANAGER];

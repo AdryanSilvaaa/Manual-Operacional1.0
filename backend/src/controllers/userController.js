@@ -3,7 +3,8 @@
  * Altere campos permitidos aqui; SQL e formato persistido ficam em models/User.js.
  */
 import { deleteUser, listUsers, updateUser } from '../models/User.js';
-import { findOrCreateSector } from '../models/Sector.js';
+import { findSectorsByIds } from '../models/Sector.js';
+import { parseSectorIds } from '../utils/access.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 
 export async function index(req, res) {
@@ -39,21 +40,35 @@ export async function destroy(req, res) {
   res.status(204).send();
 }
 
-// Permite trocar o setor e os dados de identificacao de um usuario existente.
-export async function update(req, res) {
-  const { nome, identificador, role, setor } = req.body;
-  if (!nome || !identificador || !setor || !['suporte', 'gerente_setor', 'usuario'].includes(role)) {
-    return res.status(400).json({ message: 'Nome, usuario, setor e perfil validos sao obrigatorios' });
-  }
+/**
+ * Valida os setores de um usuário: operador e gerente de setor precisam de pelo menos um;
+ * suporte pode ficar sem setor. Os setores precisam existir (são criados na tela Setores).
+ */
+export async function validateUserSectors(role, value) {
+  const ids = parseSectorIds(value);
+  if (role !== 'suporte' && !ids.length) return { error: 'Selecione pelo menos um setor' };
+  if (!ids.length) return { ids };
+  const found = await findSectorsByIds(ids);
+  if (found.length !== ids.length) return { error: 'Setor nao encontrado' };
+  return { ids };
+}
 
-  const sector = await findOrCreateSector(setor);
+// Permite trocar os setores e os dados de identificacao de um usuario existente.
+export async function update(req, res) {
+  const { nome, identificador, role } = req.body;
+  if (!nome || !identificador || !['suporte', 'gerente_setor', 'usuario'].includes(role)) {
+    return res.status(400).json({ message: 'Nome, usuario e perfil validos sao obrigatorios' });
+  }
+  const sectors = await validateUserSectors(role, req.body.sectorIds);
+  if (sectors.error) return res.status(400).json({ message: sectors.error });
+
   try {
-    const user = await updateUser(req.params.id, { nome, identificador, role, sectorId: sector.id });
+    const user = await updateUser(req.params.id, { nome, identificador, role, sectorIds: sectors.ids });
     if (!user) return res.status(404).json({ message: 'Usuario nao encontrado' });
-    res.json({ ...user, setor: sector.nome });
+    res.json(user);
   } catch (error) {
     if (!shouldUseDemoStore(error)) throw error;
-    const user = demoStore.updateUser(req.params.id, { nome, identificador, role, sectorId: sector.id, setor: sector.nome });
+    const user = demoStore.updateUser(req.params.id, { nome, identificador, role, sectorIds: sectors.ids });
     if (!user) return res.status(404).json({ message: 'Usuario nao encontrado' });
     res.json(user);
   }

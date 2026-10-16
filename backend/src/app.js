@@ -12,7 +12,7 @@ import sectorRoutes from './routes/sectors.js';
 import systemRoutes from './routes/systems.js';
 import userRoutes from './routes/users.js';
 import progressRoutes from './routes/progress.js';
-import quizRoutes from './routes/quiz.js';
+import examRoutes from './routes/exams.js';
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
@@ -35,7 +35,7 @@ app.use('/api/manuals', manualRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sectors', sectorRoutes);
 app.use('/api/progress', progressRoutes);
-app.use('/api/quiz', quizRoutes);
+app.use('/api/exams', examRoutes);
 
 app.use((request, response) => {
   response.status(404).json({ message: 'Rota não encontrada' });

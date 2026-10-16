@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS users (
   identificador VARCHAR(160),
   senha TEXT NOT NULL,
   role VARCHAR(20) NOT NULL,
-  sector_id INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -38,7 +37,6 @@ CREATE TABLE IF NOT EXISTS manuals (
   sector_id INTEGER,
   criado_por INTEGER,
   version INTEGER NOT NULL DEFAULT 1,
-  due_at TIMESTAMPTZ,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -46,12 +44,10 @@ CREATE TABLE IF NOT EXISTS manuals (
 
 -- Colunas introduzidas depois da primeira versão.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS identificador VARCHAR(160);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS sector_id INTEGER;
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 ALTER TABLE manuals ADD COLUMN IF NOT EXISTS system_id INTEGER;
 ALTER TABLE manuals ADD COLUMN IF NOT EXISTS sector_id INTEGER;
 ALTER TABLE manuals ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE manuals ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ;
 ALTER TABLE manuals ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- Destinos neutros para relacionamentos ausentes em registros legados.
@@ -70,10 +66,6 @@ UPDATE users
 SET identificador = COALESCE(NULLIF(BTRIM(email), ''), 'usuario_' || id)
 WHERE identificador IS NULL OR BTRIM(identificador) = '';
 
-UPDATE users
-SET sector_id = (SELECT id FROM sectors WHERE nome = 'Geral')
-WHERE sector_id IS NULL AND role IN ('usuario', 'gerente_setor');
-
 UPDATE manuals
 SET sector_id = (SELECT id FROM sectors WHERE nome = 'Geral')
 WHERE sector_id IS NULL;
@@ -88,9 +80,6 @@ ALTER TABLE manuals ALTER COLUMN sector_id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identificador_unique ON users (identificador);
 
 -- Relações explícitas e compatíveis com as regras da aplicação.
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_sector_id_fkey;
-ALTER TABLE users ADD CONSTRAINT users_sector_id_fkey
-  FOREIGN KEY (sector_id) REFERENCES sectors(id) ON DELETE SET NULL;
 ALTER TABLE manuals DROP CONSTRAINT IF EXISTS manuals_system_id_fkey;
 ALTER TABLE manuals ADD CONSTRAINT manuals_system_id_fkey
   FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE RESTRICT;
@@ -126,24 +115,64 @@ ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS page_count INTEGER NOT NULL
 ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS last_page INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS pages_viewed INTEGER[] NOT NULL DEFAULT '{}';
 
-CREATE TABLE IF NOT EXISTS quiz_questions (
-  id SERIAL PRIMARY KEY,
-  manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
-  prompt TEXT NOT NULL CHECK (BTRIM(prompt) <> ''),
-  options JSONB NOT NULL CHECK (jsonb_typeof(options) = 'array' AND jsonb_array_length(options) >= 2),
-  correct_option INTEGER NOT NULL CHECK (correct_option >= 0 AND correct_option < jsonb_array_length(options)),
-  position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
-  UNIQUE (manual_id, position)
+-- Setores de cada usuário. Operador e gerente de setor podem ter vários; suporte não precisa de nenhum.
+-- O acesso a manuais, provas e painel considera todos os setores do usuário.
+CREATE TABLE IF NOT EXISTS user_sectors (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sector_id INTEGER NOT NULL REFERENCES sectors(id) ON DELETE RESTRICT,
+  PRIMARY KEY (user_id, sector_id)
 );
 
-CREATE TABLE IF NOT EXISTS quiz_attempts (
+-- Provas por setor: gerente de setor cria para o próprio setor; suporte escolhe um setor ou todos.
+-- sector_id NULL significa prova para todos os setores.
+CREATE TABLE IF NOT EXISTS exams (
   id SERIAL PRIMARY KEY,
+  titulo VARCHAR(180) NOT NULL CHECK (BTRIM(titulo) <> ''),
+  descricao TEXT,
+  sector_id INTEGER REFERENCES sectors(id) ON DELETE RESTRICT,
+  criado_por INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (ends_at > starts_at)
+);
+
+-- Até 10 perguntas por prova: múltipla escolha (alternativas A a D) ou resposta aberta.
+CREATE TABLE IF NOT EXISTS exam_questions (
+  id SERIAL PRIMARY KEY,
+  exam_id INTEGER NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 9),
+  type VARCHAR(20) NOT NULL CHECK (type IN ('multipla_escolha', 'aberta')),
+  prompt TEXT NOT NULL CHECK (BTRIM(prompt) <> ''),
+  options JSONB,
+  correct_option INTEGER,
+  CHECK (
+    (type = 'multipla_escolha' AND jsonb_typeof(options) = 'array' AND jsonb_array_length(options) = 4
+      AND correct_option BETWEEN 0 AND 3)
+    OR (type = 'aberta' AND options IS NULL AND correct_option IS NULL)
+  ),
+  UNIQUE (exam_id, position)
+);
+
+-- Uma entrega por colaborador e prova. A nota considera só as perguntas de múltipla escolha.
+CREATE TABLE IF NOT EXISTS exam_submissions (
+  id SERIAL PRIMARY KEY,
+  exam_id INTEGER NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
-  score INTEGER NOT NULL CHECK (score BETWEEN 0 AND 100),
-  passed BOOLEAN NOT NULL,
-  answers JSONB NOT NULL CHECK (jsonb_typeof(answers) IN ('array', 'object')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  objective_total INTEGER NOT NULL CHECK (objective_total BETWEEN 0 AND 10),
+  objective_correct INTEGER NOT NULL CHECK (objective_correct BETWEEN 0 AND objective_total),
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (exam_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS exam_answers (
+  submission_id INTEGER NOT NULL REFERENCES exam_submissions(id) ON DELETE CASCADE,
+  question_id INTEGER NOT NULL REFERENCES exam_questions(id) ON DELETE CASCADE,
+  selected_option INTEGER CHECK (selected_option BETWEEN 0 AND 3),
+  answer_text TEXT,
+  PRIMARY KEY (submission_id, question_id)
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -182,11 +211,11 @@ CREATE INDEX IF NOT EXISTS idx_permissions_manual_id ON permissions(manual_id);
 CREATE INDEX IF NOT EXISTS idx_manuals_system_id ON manuals(system_id);
 CREATE INDEX IF NOT EXISTS idx_manuals_sector_id ON manuals(sector_id);
 CREATE INDEX IF NOT EXISTS idx_manuals_active ON manuals(active);
-CREATE INDEX IF NOT EXISTS idx_users_sector_id ON users(sector_id);
+CREATE INDEX IF NOT EXISTS idx_user_sectors_sector_id ON user_sectors(sector_id);
 CREATE INDEX IF NOT EXISTS idx_manual_progress_manual_id ON manual_progress(manual_id);
 CREATE INDEX IF NOT EXISTS idx_manual_progress_completed_at ON manual_progress(completed_at);
-CREATE INDEX IF NOT EXISTS idx_quiz_questions_manual_id ON quiz_questions(manual_id);
-CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user_manual ON quiz_attempts(user_id, manual_id);
+CREATE INDEX IF NOT EXISTS idx_exams_sector_period ON exams(sector_id, starts_at, ends_at);
+CREATE INDEX IF NOT EXISTS idx_exam_submissions_user_id ON exam_submissions(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_manual_version_history_manual_id ON manual_version_history(manual_id);
 CREATE INDEX IF NOT EXISTS idx_progress_version_history_manual_id ON progress_version_history(manual_id);

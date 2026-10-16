@@ -315,7 +315,7 @@
 
 .dashboard-filters {
   margin-bottom: 20px;
-  grid-template-columns: repeat(2, minmax(180px, 320px));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 320px));
 }
 .export-button { align-self: end; }
 .card-progress { display: flex; margin-top: 12px; color: var(--color-navy); justify-content: space-between; font-size: 12px; font-weight: 800; }
@@ -507,3 +507,70 @@ legend {
   background: #ffdce7;
   transform: translateY(-1px);
 }
+
+/* PROVAS ------------------------------------------------------------------ */
+/* Período de realização lado a lado; vira uma coluna em telas estreitas. */
+.exam-period { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.exam-question-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--color-navy); }
+.exam-question-header select { width: auto; }
+.quiz-editor .secondary-button { display: inline-flex; align-items: center; justify-self: start; gap: 6px; }
+fieldset > .secondary-button { display: inline-flex; align-items: center; gap: 6px; }
+.quiz-option strong { margin-right: 4px; color: var(--color-navy); }
+/* Textos longos sem espaço (enunciados, alternativas, títulos) quebram dentro do card em vez de alargar a página. */
+.admin-panel { grid-template-columns: minmax(0, 1fr); align-content: start; }
+/* Título do painel com campo de pesquisa ao lado; quebra para baixo em telas estreitas. */
+.panel-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.panel-header .search-field { flex: 1 1 200px; max-width: 300px; min-height: 44px; margin: 0; }
+.panel-header .search-field input { min-height: 42px; }
+
+/* Setor do Painel de uso: pesquisa com lista suspensa (components/SearchSelect.jsx). */
+.filter-field { display: grid; gap: 8px; color: var(--color-navy); font-size: 14px; font-weight: 700; align-content: start; }
+.search-select { position: relative; }
+.search-select .search-field { cursor: pointer; }
+.search-select-arrow { flex: none; color: var(--color-muted); }
+.search-select-list { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; left: 0; max-height: 260px; margin: 0; padding: 6px; overflow-y: auto; list-style: none; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow-card); }
+.search-select-list li { padding: 10px 12px; color: var(--color-text); border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; overflow-wrap: anywhere; }
+.search-select-list li.highlighted { background: #f1f4fb; }
+.search-select-list li[aria-selected="true"] { color: var(--color-navy); font-weight: 800; }
+.search-select-list .search-select-empty { color: var(--color-muted); cursor: default; }
+.search-select.locked .search-field { background: #f4f6fa; cursor: not-allowed; }
+.search-select.locked input { color: var(--color-navy); font-weight: 600; cursor: not-allowed; -webkit-text-fill-color: var(--color-navy); opacity: 1; }
+.manual-form fieldset, .manual-form label { min-width: 0; }
+.manual-form legend { max-width: 100%; }
+.manual-form legend, .quiz-option, .page-heading, .manual-card, .modal-card, .exam-answers, .exam-summary, .dashboard-panel h2, .report-table td { overflow-wrap: anywhere; }
+.quiz-option { align-items: flex-start; gap: 6px; }
+.quiz-option input { flex: none; margin-top: 3px; }
+.quiz-option span { min-width: 0; }
+.sector-picker { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.sector-picker label { display: flex; flex-direction: row; align-items: center; gap: 6px; font-weight: 500; }
+.sector-picker input { width: auto; min-height: auto; }
+.modal-card.profile-card { position: relative; max-width: 420px; }
+.modal-close { position: absolute; top: 14px; right: 14px; display: grid; width: 34px; height: 34px; color: var(--color-muted); background: transparent; border: 0; border-radius: 8px; place-items: center; cursor: pointer; }
+.modal-close:hover { background: #f1f4fb; }
+.profile-details { display: grid; margin: 0; gap: 4px; overflow-wrap: anywhere; }
+.profile-details dt { margin-top: 10px; color: var(--color-muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.profile-details dd { margin: 0; color: var(--color-navy); font-weight: 700; }
+.sector-chips { display: flex; margin: 4px 0 0; padding: 0; list-style: none; flex-wrap: wrap; gap: 6px; }
+.sector-chips li { display: inline-flex; padding: 5px 10px; background: #eef2fb; border-radius: 999px; font-size: 13px; align-items: center; gap: 6px; }
+.exam-answers-panel { margin-top: 16px; padding: 16px; background: #f7f9ff; border-radius: 10px; overflow-wrap: anywhere; }
+.exam-answers-panel h3 { margin: 0 0 8px; color: var(--color-navy); font-size: 15px; }
+.exam-prompt { margin: 0 0 4px; color: var(--color-navy); font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Abas do Painel de Uso. */
+.tab-list { display: flex; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); gap: 4px; flex-wrap: wrap; }
+.tab { padding: 12px 16px; color: var(--color-muted); background: transparent; border: 0; border-bottom: 3px solid transparent; font-weight: 800; cursor: pointer; }
+.tab.active { color: var(--color-navy); border-bottom-color: var(--color-primary); }
+
+/* Resultados de provas. */
+.exam-summary { display: flex; margin: -8px 0 18px; color: var(--color-muted); font-size: 13px; flex-wrap: wrap; gap: 6px 18px; }
+.exam-answers { display: grid; margin: 4px 0; padding-left: 20px; gap: 10px; white-space: normal; }
+.exam-answers p { margin: 4px 0 0; white-space: pre-wrap; }
+.answer-right { color: var(--color-success); font-weight: 800; }
+.answer-wrong { color: var(--color-danger); font-weight: 800; }
+
+/* Pop-up de prova disponível. */
+.modal-backdrop { position: fixed; z-index: 50; display: grid; padding: 16px; background: rgb(23 29 77 / 45%); inset: 0; place-items: center; }
+.modal-card { display: grid; width: 100%; max-width: 440px; padding: 28px; background: var(--color-surface); border-radius: var(--radius); box-shadow: var(--shadow-card); gap: 14px; }
+.modal-card h2 { margin: 0; color: var(--color-navy); font-size: 20px; }
+.modal-card p { margin: 0; color: var(--color-muted); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }

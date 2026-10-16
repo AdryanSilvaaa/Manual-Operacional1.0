@@ -38,3 +38,14 @@ export async function findSectorById(id) {
     return demoStore.findSectorById(id);
   }
 }
+
+/** Setores existentes entre os ids informados; usado para validar a lista de setores de um usuário. */
+export async function findSectorsByIds(ids) {
+  try {
+    const { rows } = await query('SELECT id, nome FROM sectors WHERE id = ANY($1::int[]) ORDER BY nome', [ids]);
+    return rows;
+  } catch (error) {
+    if (!shouldUseDemoStore(error)) throw error;
+    return demoStore.findSectorsByIds(ids);
+  }
+}

@@ -55,7 +55,7 @@ export default function Manuais() {
       {loading ? (
         <p>Carregando...</p>
       ) : manuals.length === 0 ? (
-        <p className="empty-state">Ainda não há nenhum manual cadastrado para este sistema em seu setor.</p>
+        <p className="empty-state">Ainda não há nenhum manual cadastrado para este sistema nos seus setores.</p>
       ) : filteredManuals.length === 0 ? (
         <p className="empty-state">Nenhum manual encontrado para “{searchTerm}”.</p>
       ) : (

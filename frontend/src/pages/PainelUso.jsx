@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3, Download, UsersRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
-import SearchField from '../components/SearchField.jsx';
+import SearchSelect from '../components/SearchSelect.jsx';
 import BackButton from '../components/BackButton.jsx';
+import ResultadosProvas from '../components/ResultadosProvas.jsx';
+import { sectorScope } from '../utils/sectorScope.js';
 
-function normalize(value) {
-  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-}
+const TABS = [{ id: 'uso', label: 'Uso dos manuais' }, { id: 'provas', label: 'Resultados de Provas' }];
 
 function statusOf(row) {
   if (row.completed_at) return 'Concluído';
@@ -20,12 +20,13 @@ function formatDate(value) {
 }
 
 export default function PainelUso() {
-  const { apiUrl, token } = useAuth();
+  const { apiUrl, token, user } = useAuth();
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
-  const [manualSearch, setManualSearch] = useState('');
-  const [operatorSearch, setOperatorSearch] = useState('');
+  const [manualFilter, setManualFilter] = useState('');
+  const [operatorFilter, setOperatorFilter] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
+  const [tab, setTab] = useState('uso');
 
   useEffect(() => {
     fetch(`${apiUrl}/api/progress/report`, { headers: createAuthHeaders(token) })
@@ -33,8 +34,14 @@ export default function PainelUso() {
   }, [apiUrl, token]);
 
   const manuals = useMemo(() => [...new Map(rows.map((row) => [row.manual_id, row.manual_title])).entries()], [rows]);
-  const sectors = [...new Set(rows.map((row) => row.sector_name))].sort();
-  const filtered = rows.filter((row) => normalize(row.manual_title).includes(normalize(manualSearch)) && normalize(row.user_name).includes(normalize(operatorSearch)) && (!sectorFilter || row.sector_name === sectorFilter));
+  const scope = sectorScope(user, rows.map((row) => row.sector_name));
+  const sector = scope.locked || sectorFilter;
+  const inSector = rows.filter((row) => !sector || row.sector_name === sector);
+  // As listas de manual e operador mostram só o que existe no setor escolhido.
+  const byLabel = (a, b) => a.label.localeCompare(b.label, 'pt-BR');
+  const manualOptions = [...new Map(inSector.map((row) => [String(row.manual_id), row.manual_title])).entries()].map(([value, label]) => ({ value, label })).sort(byLabel);
+  const operatorOptions = [...new Map(inSector.map((row) => [String(row.user_id), row.user_name])).entries()].map(([value, label]) => ({ value, label })).sort(byLabel);
+  const filtered = inSector.filter((row) => (!manualFilter || String(row.manual_id) === manualFilter) && (!operatorFilter || String(row.user_id) === operatorFilter));
   const completed = filtered.filter((row) => row.completed_at).length;
   const started = filtered.filter((row) => row.first_access_at).length;
   const completionRate = filtered.length ? Math.round((completed / filtered.length) * 100) : 0;
@@ -57,12 +64,14 @@ export default function PainelUso() {
 
   return <section className="page-section usage-dashboard">
     <BackButton fallback="/configuracoes" />
-    <div className="page-heading"><p className="eyebrow">Acompanhamento</p><h1>Painel de uso</h1><p>Progresso dos operadores nos manuais disponíveis para o setor.</p></div>
+    <div className="page-heading"><p className="eyebrow">Acompanhamento</p><h1>Painel de uso</h1><p>Progresso dos operadores nos manuais e resultados das provas.</p></div>
+    <div className="tab-list" role="tablist">{TABS.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? 'tab active' : 'tab'} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
+    {tab === 'provas' ? <ResultadosProvas /> : <>
     {error && <p className="alert">{error}</p>}
     <div className="dashboard-filters">
-      <label>Manual<SearchField id="manual-search" value={manualSearch} onChange={setManualSearch} placeholder="Pesquisar manual pelo nome" label="Pesquisar manual pelo nome" suggestions={manuals.map(([, name]) => name)} /></label>
-      <label>Operador<SearchField id="operator-search" value={operatorSearch} onChange={setOperatorSearch} placeholder="Pesquisar operador pelo nome" label="Pesquisar operador pelo nome" suggestions={[...new Set(rows.map((row) => row.user_name))]} /></label>
-      <label>Setor<select value={sectorFilter} onChange={(event) => setSectorFilter(event.target.value)}><option value="">Todos</option>{sectors.map((sector) => <option key={sector}>{sector}</option>)}</select></label>
+      <div className="filter-field"><label htmlFor="manual-search">Manual</label><SearchSelect id="manual-search" value={manualFilter} onChange={setManualFilter} options={manualOptions} placeholder="Pesquisar manual pelo nome" label="Pesquisar manual pelo nome" allLabel="Todos os manuais" emptyText="Nenhum manual encontrado" /></div>
+      <div className="filter-field"><label htmlFor="operator-search">Operador</label><SearchSelect id="operator-search" value={operatorFilter} onChange={setOperatorFilter} options={operatorOptions} placeholder="Pesquisar operador pelo nome" label="Pesquisar operador pelo nome" allLabel="Todos os operadores" emptyText="Nenhum operador encontrado" /></div>
+      <div className="filter-field"><label htmlFor="sector-search">Setor</label><SearchSelect id="sector-search" value={sector} onChange={(value) => { setSectorFilter(value); setManualFilter(''); setOperatorFilter(''); }} options={scope.options} placeholder="Pesquisar setor pelo nome" label="Pesquisar setor pelo nome" allLabel={scope.allLabel} emptyText="Nenhum setor encontrado" locked={Boolean(scope.locked)} /></div>
       <button type="button" className="primary-button export-button" onClick={exportCsv}><Download size={17} /> Exportar CSV</button>
     </div>
     <div className="metric-grid">
@@ -75,5 +84,6 @@ export default function PainelUso() {
     <div className="dashboard-panel"><h2>Detalhamento por operador</h2><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Operador</th><th>Setor</th><th>Manual</th><th>Status</th><th>PDF</th><th>Vídeo</th><th>Último acesso</th><th>Conclusão</th></tr></thead><tbody>
       {filtered.map((row) => <tr key={`${row.user_id}-${row.manual_id}`}><td>{row.user_name}</td><td>{row.sector_name}</td><td>{row.manual_title}</td><td><span className={`status-pill status-${statusOf(row).toLowerCase().replace(' ', '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '')}`}>{statusOf(row)}</span></td><td>{row.pdf_completed ? 'Concluído' : 'Pendente'}</td><td>{Math.round(Number(row.video_progress))}%</td><td>{formatDate(row.last_access_at)}</td><td>{formatDate(row.completed_at)}</td></tr>)}
     </tbody></table></div></div>
+    </>}
   </section>;
 }

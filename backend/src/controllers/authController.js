@@ -5,7 +5,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createUser, findUserByIdentifier, findUserById, updatePassword } from '../models/User.js';
-import { findOrCreateSector } from '../models/Sector.js';
+import { validateUserSectors } from './userController.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import { audit } from '../models/Audit.js';
 import { isStrongPassword } from '../utils/security.js';
@@ -14,7 +14,7 @@ const loginAttempts = new Map();
 
 function signToken(user) {
   return jwt.sign(
-    { id: user.id, nome: user.nome, role: user.role, sector_id: user.sector_id },
+    { id: user.id, nome: user.nome, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: '8h' }
   );
@@ -52,14 +52,8 @@ export async function login(req, res) {
   loginAttempts.delete(attemptKey);
   audit(user.id, 'login', 'user', user.id).catch(() => {});
 
-  const safeUser = {
-    id: user.id,
-    nome: user.nome,
-    identificador: user.identificador,
-    role: user.role
-  };
-
-  res.json({ token: signToken(user), user: safeUser });
+  // Setores incluídos para as telas que dependem deles (Criar Manual, Criar Prova) funcionarem logo após o login.
+  res.json({ token: signToken(user), user: await loadProfile(user.id) });
 }
 
 export async function changePassword(req, res) {
@@ -75,10 +69,10 @@ export async function changePassword(req, res) {
 }
 
 export async function registerManagerUser(req, res) {
-  const { nome, identificador, senha, role = 'usuario', setor } = req.body;
+  const { nome, identificador, senha, role = 'usuario' } = req.body;
 
-  if (!nome || !identificador || !senha || !setor) {
-    return res.status(400).json({ message: 'Nome, usuario, setor e senha sao obrigatorios' });
+  if (!nome || !identificador || !senha) {
+    return res.status(400).json({ message: 'Nome, usuario e senha sao obrigatorios' });
   }
 
   if (!isStrongPassword(senha)) {
@@ -89,33 +83,34 @@ export async function registerManagerUser(req, res) {
     return res.status(400).json({ message: 'Role invalida' });
   }
 
+  const sectors = await validateUserSectors(role, req.body.sectorIds);
+  if (sectors.error) return res.status(400).json({ message: sectors.error });
+
   const senhaHash = await bcrypt.hash(senha, 10);
-  const sector = await findOrCreateSector(setor);
   let user;
   try {
-    user = await createUser({ nome, identificador, senhaHash, role, sectorId: sector.id });
+    user = await createUser({ nome, identificador, senhaHash, role, sectorIds: sectors.ids });
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
       throw error;
     }
 
-    user = demoStore.createUser({ nome, identificador, senhaHash, role, sectorId: sector.id, setor: sector.nome });
+    user = demoStore.createUser({ nome, identificador, senhaHash, role, sectorIds: sectors.ids });
   }
 
   res.status(201).json(user);
 }
 
-export async function me(req, res) {
-  let user;
+/** Dados do usuário sem senha, com sector_ids e setores ({ id, nome }). */
+async function loadProfile(id) {
   try {
-    user = await findUserById(req.user.id);
+    return await findUserById(id);
   } catch (error) {
-    if (!shouldUseDemoStore(error)) {
-      throw error;
-    }
-
-    user = demoStore.findUserById(req.user.id);
+    if (!shouldUseDemoStore(error)) throw error;
+    return demoStore.findUserById(id);
   }
+}
 
-  res.json(user);
+export async function me(req, res) {
+  res.json(await loadProfile(req.user.id));
 }

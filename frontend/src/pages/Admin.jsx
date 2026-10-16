@@ -1,5 +1,5 @@
 /** Painel de atalhos administrativos; links e perfis visíveis são definidos nesta tela. */
-import { BarChart3, BookOpenCheck, Boxes, Building2, UsersRound } from 'lucide-react';
+import { BarChart3, BookOpenCheck, Boxes, Building2, ClipboardCheck, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { FULL_ADMIN_ROLES } from '../constants/roles.js';
@@ -16,7 +16,8 @@ export default function Admin() {
       { to: '/configuracoes/sistemas', icon: Boxes, title: 'Cadastrar Sistemas', text: 'Gerencie os sistemas disponíveis para todos os setores.' }
     ] : []),
     { to: '/configuracoes/manuais', icon: BookOpenCheck, title: 'Criar Manual', text: 'Envie materiais e vincule-os a um setor.' },
-    { to: '/configuracoes/painel-uso', icon: BarChart3, title: 'Painel de Uso', text: 'Acompanhe leituras e conclusões por manual e operador.' }
+    { to: '/configuracoes/provas', icon: ClipboardCheck, title: 'Criar Prova', text: 'Monte provas de até 10 perguntas para os seus setores.' },
+    { to: '/configuracoes/painel-uso', icon: BarChart3, title: 'Painel de Uso', text: 'Acompanhe leituras, conclusões e resultados de provas.' }
   ];
   return <section className="page-section"><BackButton fallback="/sistemas" /><div className="page-heading"><p className="eyebrow">Perfil</p><h1>Configurações</h1></div><div className="manual-grid">{items.map(({ to, icon: Icon, title, text }) => <Link key={to} to={to} className="manual-card"><div className="manual-logo"><Icon size={28} /></div><div><h2>{title}</h2><p>{text}</p></div></Link>)}</div></section>;
 }

@@ -2,17 +2,20 @@
  * Estrutura das páginas privadas: sidebar, cabeçalho, perfil e área do Outlet.
  * Altere links aqui para mudar a navegação; aparência correspondente fica em styles/layout.css.
  */
-import { BarChart3, ChevronDown, KeyRound, LogOut, MonitorCog, Settings, UserRound } from 'lucide-react';
+import { BarChart3, ChevronDown, ClipboardCheck, IdCard, KeyRound, LogOut, MonitorCog, Settings, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { ADMIN_ROLES } from '../constants/roles.js';
+import { ADMIN_ROLES, ROLES } from '../constants/roles.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import AvisoProva from './AvisoProva.jsx';
 import BrandLogo from './BrandLogo.jsx';
+import PerfilUsuario from './PerfilUsuario.jsx';
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   function handleLogout() {
     logout();
@@ -25,6 +28,7 @@ export default function AppLayout() {
         <Link to="/" className="brand"><BrandLogo light /></Link>
         <nav className="sidebar-nav">
           <Link to="/sistemas" title="Sistemas"><MonitorCog size={18} /><span>Sistemas</span></Link>
+          {user.role === ROLES.USER && <Link to="/provas" title="Provas"><ClipboardCheck size={18} /><span>Provas</span></Link>}
           {ADMIN_ROLES.includes(user.role) && (
             <>
               <Link to="/configuracoes/painel-uso" title="Painel de uso"><BarChart3 size={18} /><span>Painel de uso</span></Link>
@@ -44,6 +48,7 @@ export default function AppLayout() {
                 <UserRound size={16} /> {user.nome} <ChevronDown size={15} />
               </button>
               {profileOpen && <div className="profile-dropdown">
+                <button type="button" onClick={() => { setProfileOpen(false); setProfileModalOpen(true); }}><IdCard size={16} /> Meu perfil</button>
                 <Link to="/alterar-senha" onClick={() => setProfileOpen(false)}><KeyRound size={16} /> Alterar senha</Link>
                 <button type="button" onClick={handleLogout}><LogOut size={16} /> Sair</button>
               </div>}
@@ -58,6 +63,8 @@ export default function AppLayout() {
         </header>
 
         <main><Outlet /></main>
+        {user && <AvisoProva />}
+        {user && profileModalOpen && <PerfilUsuario onClose={() => setProfileModalOpen(false)} />}
       </div>
     </div>
   );

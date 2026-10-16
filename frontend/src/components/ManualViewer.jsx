@@ -8,7 +8,6 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import BackButton from './BackButton.jsx';
 import PdfReader from './PdfReader.jsx';
-import Quiz from './Quiz.jsx';
 
 function resolveUrl(apiUrl, url) {
   if (!url) {
@@ -137,7 +136,6 @@ export default function ManualViewer() {
         />
         <div className="video-progress"><span>Progresso do vídeo</span><div><i style={{ width: `${Math.min(100, Number(progress.video_progress) || 0)}%` }} /></div><strong>{Math.round(Number(progress.video_progress) || 0)}%</strong></div>
       </div>
-      <Quiz apiUrl={apiUrl} token={token} manualId={id} onPassed={() => saveProgress()} />
       {progress.completed_at && <p className="manual-complete"><CheckCircle2 size={20} /> Manual concluído</p>}
     </section>
   );
