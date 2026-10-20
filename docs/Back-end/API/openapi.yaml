@@ -15,6 +15,7 @@ tags:
   - name: Manuals
   - name: Progress
   - name: Exams
+  - name: Uploads
 paths:
   /health:
     get:
@@ -30,6 +31,29 @@ paths:
                 properties:
                   status: { type: string, example: ok }
                   service: { type: string, example: Manual Operacional Digital API }
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Verifica se o processo e o PostgreSQL estão disponíveis
+      responses:
+        '200':
+          description: Pronto para receber tráfego
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  database: { type: string, example: ok }
+        '503':
+          description: Banco de dados indisponível
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: unavailable }
+                  database: { type: string, example: indisponivel }
   /api/auth/login:
     post:
       tags: [Auth]
@@ -232,12 +256,18 @@ paths:
         content:
           multipart/form-data:
             schema: { $ref: '#/components/schemas/ManualForm' }
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualKeysForm' }
       responses:
         '201':
           description: Manual criado
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Manual' }
+        '400':
+          description: Campo obrigatório ausente ou tipo de arquivo não permitido
+        '413':
+          description: Arquivo acima do limite (PDF 20 MB, vídeo 200 MB por padrão)
   /api/manuals/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
@@ -269,6 +299,57 @@ paths:
       summary: Exclui manual (suporte)
       responses:
         '204': { description: Manual excluído }
+  /api/uploads/config:
+    get:
+      tags: [Uploads]
+      summary: Informa se o upload é direto ao bucket e os limites (gerência)
+      responses:
+        '200':
+          description: Configuração de upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  directUpload: { type: boolean }
+                  driver: { type: string, enum: [s3, supabase, local] }
+                  limits:
+                    type: object
+                    properties:
+                      pdfMb: { type: integer, example: 20 }
+                      videoMb: { type: integer, example: 200 }
+  /api/uploads/presign:
+    post:
+      tags: [Uploads]
+      summary: Gera URL assinada para enviar PDF ou vídeo direto ao bucket (gerência)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, contentType, size]
+              properties:
+                kind: { type: string, enum: [pdf, video] }
+                contentType: { type: string, enum: [application/pdf, video/mp4, video/webm, video/quicktime] }
+                size: { type: integer, description: Tamanho em bytes }
+      responses:
+        '200':
+          description: URL de envio
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+                  method: { type: string, example: PUT }
+                  url: { type: string }
+                  headers: { type: object, additionalProperties: { type: string } }
+                  expiresIn: { type: integer, example: 600 }
+        '400':
+          description: Tipo não permitido ou upload direto não configurado
+        '413':
+          description: Arquivo acima do limite
   /api/progress/report:
     get:
       tags: [Progress]
@@ -554,6 +635,17 @@ components:
         setor: { type: string }
         pdf: { type: string, format: binary }
         video: { type: string, format: binary }
+    ManualKeysForm:
+      type: object
+      description: Cadastro depois do upload direto ao bucket (modo s3); pdfKey e videoKey vêm de /api/uploads/presign.
+      required: [titulo, systemId, pdfKey, videoKey]
+      properties:
+        titulo: { type: string }
+        descricao: { type: string }
+        systemId: { type: integer }
+        setor: { type: string }
+        pdfKey: { type: string, example: pdfs/2f6c1d0e-8a1b-4c5d-9e7f-0a1b2c3d4e5f.pdf }
+        videoKey: { type: string, example: videos/2f6c1d0e-8a1b-4c5d-9e7f-0a1b2c3d4e5f.mp4 }
     ManualUpdateForm:
       type: object
       properties:

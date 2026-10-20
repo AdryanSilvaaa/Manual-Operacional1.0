@@ -4,6 +4,15 @@
  */
 import { query, withTransaction } from '../config/db.js';
 
+function groupBy(rows, key) {
+  const groups = new Map();
+  for (const row of rows) {
+    if (!groups.has(row[key])) groups.set(row[key], []);
+    groups.get(row[key]).push(row);
+  }
+  return groups;
+}
+
 /** Grava a prova e suas perguntas na mesma transação. */
 export async function createExam({ titulo, descricao, sectorId, criadoPor, startsAt, endsAt, questions }) {
   return withTransaction(async (client) => {
@@ -121,14 +130,17 @@ export async function listExamResults(user) {
     )
   ]);
 
+  // Agrupa uma vez por chave em vez de filtrar a lista inteira para cada prova e entrega.
+  const questionsByExam = groupBy(questions, 'exam_id');
+  const submissionsByExam = groupBy(submissions, 'exam_id');
+  const answersBySubmission = groupBy(answers, 'submission_id');
+
   return exams.map((exam) => ({
     ...exam,
-    questions: questions.filter((question) => question.exam_id === exam.id),
-    submissions: submissions
-      .filter((submission) => submission.exam_id === exam.id)
-      .map((submission) => ({
-        ...submission,
-        answers: answers.filter((answer) => answer.submission_id === submission.id)
-      }))
+    questions: questionsByExam.get(exam.id) || [],
+    submissions: (submissionsByExam.get(exam.id) || []).map((submission) => ({
+      ...submission,
+      answers: answersBySubmission.get(submission.id) || []
+    }))
   }));
 }

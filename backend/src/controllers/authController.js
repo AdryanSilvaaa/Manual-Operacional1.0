@@ -10,7 +10,17 @@ import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import { audit } from '../models/Audit.js';
 import { isStrongPassword } from '../utils/security.js';
 
+// Tentativas de login por IP + usuário, guardadas na memória desta instância.
 const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
+// Remove registros vencidos para o mapa não crescer sem limite sob muitas tentativas.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, attempt] of loginAttempts) {
+    if (attempt.blockedUntil <= now && now - attempt.lastFailureAt > LOGIN_WINDOW_MS) loginAttempts.delete(key);
+  }
+}, 5 * 60 * 1000).unref();
 
 function signToken(user) {
   return jwt.sign(
@@ -46,7 +56,7 @@ export async function login(req, res) {
 
   if (!validPassword) {
     const failures = (attempt?.failures || 0) + 1;
-    loginAttempts.set(attemptKey, { failures, blockedUntil: failures >= 5 ? Date.now() + 15 * 60 * 1000 : 0 });
+    loginAttempts.set(attemptKey, { failures, lastFailureAt: Date.now(), blockedUntil: failures >= 5 ? Date.now() + LOGIN_WINDOW_MS : 0 });
     return res.status(401).json({ message: 'Credenciais invalidas' });
   }
   loginAttempts.delete(attemptKey);

@@ -10,9 +10,32 @@ import {
   updateManual,
   archiveAndUpdateManual
 } from '../models/Manual.js';
-import { uploadFile } from '../config/storage.js';
+import { confirmDirectUpload, resolveFileUrl, supportsDirectUpload, uploadFile } from '../config/storage.js';
+import { ALLOWED_TYPES, maxBytesFor } from '../middleware/upload.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import { findOrCreateSector, findSectorsByIds } from '../models/Sector.js';
+
+const hasFile = (req, kind) => Boolean(req.files?.[kind]?.[0] || req.body?.[`${kind}Key`]);
+
+/**
+ * Arquivo do campo pdf ou video: chave já enviada direto ao bucket (pdfKey/videoKey) ou arquivo recebido pelo backend.
+ * Devolve o valor a gravar no banco, ou null quando o campo não veio.
+ */
+async function receiveFile(req, kind) {
+  const key = req.body?.[`${kind}Key`];
+  if (key) {
+    if (!supportsDirectUpload) throw Object.assign(new Error('Upload direto não está configurado neste ambiente'), { status: 400 });
+    return confirmDirectUpload(String(key), kind, { allowedTypes: ALLOWED_TYPES[kind], maxBytes: maxBytesFor(kind) });
+  }
+  const file = req.files?.[kind]?.[0];
+  return file ? uploadFile(file, kind === 'pdf' ? 'pdfs' : 'videos') : null;
+}
+
+// Troca as chaves do bucket por URLs assinadas temporárias; só é chamado depois de conferir o acesso ao manual.
+async function withFileUrls(manual) {
+  const [pdfUrl, videoUrl] = await Promise.all([resolveFileUrl(manual.pdf_url), resolveFileUrl(manual.video_url)]);
+  return { ...manual, pdf_url: pdfUrl, video_url: videoUrl };
+}
 
 
 export async function index(req, res) {
@@ -47,7 +70,7 @@ export async function show(req, res) {
     return res.status(404).json({ message: 'Manual nao encontrado ou sem permissao' });
   }
 
-  res.json(manual);
+  res.json(await withFileUrls(manual));
 }
 
 export async function store(req, res) {
@@ -65,12 +88,12 @@ export async function store(req, res) {
     sectorName = chosen.nome;
   }
 
-  if (!titulo || !sectorName || !systemId || !req.files?.pdf?.[0] || !req.files?.video?.[0]) {
+  if (!titulo || !sectorName || !systemId || !hasFile(req, 'pdf') || !hasFile(req, 'video')) {
     return res.status(400).json({ message: 'Setor, sistema, titulo, PDF e video sao obrigatorios' });
   }
 
-  const pdfUrl = await uploadFile(req.files.pdf[0], 'pdfs');
-  const videoUrl = await uploadFile(req.files.video[0], 'videos');
+  const pdfUrl = await receiveFile(req, 'pdf');
+  const videoUrl = await receiveFile(req, 'video');
   const sector = await findOrCreateSector(sectorName);
 
   let manual;
@@ -111,12 +134,8 @@ export async function update(req, res) {
     : req.body.systemId
       ? Number(req.body.systemId)
       : null;
-  const pdfUrl = req.files?.pdf?.[0]
-    ? await uploadFile(req.files.pdf[0], 'pdfs')
-    : null;
-  const videoUrl = req.files?.video?.[0]
-    ? await uploadFile(req.files.video[0], 'videos')
-    : null;
+  const pdfUrl = await receiveFile(req, 'pdf');
+  const videoUrl = await receiveFile(req, 'video');
   const sector = setor ? await findOrCreateSector(setor) : null;
 
   let manual;

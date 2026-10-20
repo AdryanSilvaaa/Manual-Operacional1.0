@@ -53,14 +53,7 @@ export default function ManualViewer() {
       }
 
       setManual(data);
-      const progressResponse = await fetch(`${apiUrl}/api/progress/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (progressResponse.ok) {
-        const currentProgress = await progressResponse.json();
-        setProgress(currentProgress);
-        lastVideoProgress.current = Number(currentProgress.video_progress) || 0;
-      }
+      // O PUT registra o acesso e já devolve o progresso atual, sem precisar de um GET separado.
       await saveProgress();
     }
 

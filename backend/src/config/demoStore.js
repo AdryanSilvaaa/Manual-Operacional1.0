@@ -15,6 +15,12 @@ let nextExamQuestionId = 1;
 let nextSubmissionId = 1;
 
 const sectors = [{ id: 1, nome: 'Geral' }];
+
+// Mesmo comportamento do índice único do PostgreSQL (idx_users_identificador_unique).
+function assertUniqueIdentifier(identificador, ignoreId = null) {
+  const taken = users.some((item) => item.identificador === identificador && Number(item.id) !== Number(ignoreId));
+  if (taken) throw Object.assign(new Error('duplicate key'), { code: '23505', constraint: 'idx_users_identificador_unique' });
+}
 const users = [{
   id: 1,
   nome: 'Suporte Admin',
@@ -105,6 +111,7 @@ export const demoStore = {
   },
 
   createUser({ nome, identificador, senhaHash, role, sectorIds }) {
+    assertUniqueIdentifier(identificador);
     const user = { id: nextUserId++, nome, identificador, senha: senhaHash, role, sector_ids: sectorIds.map(Number), created_at: new Date().toISOString() };
     users.push(user);
     return toSafeUser(user);
@@ -113,6 +120,7 @@ export const demoStore = {
   updateUser(id, data) {
     const user = users.find((item) => Number(item.id) === Number(id));
     if (!user) return null;
+    assertUniqueIdentifier(data.identificador, user.id);
     Object.assign(user, { nome: data.nome, identificador: data.identificador, role: data.role, sector_ids: data.sectorIds.map(Number) });
     return toSafeUser(user);
   },
