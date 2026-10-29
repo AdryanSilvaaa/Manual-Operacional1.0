@@ -1,11 +1,12 @@
 {
   "name": "manual-operacional-frontend",
   "version": "1.0.0",
-  "description": "Frontend do Manual Operacional Digital",
+  "description": "Frontend do Prumo (manuais e treinamentos operacionais)",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "build:piloto": "vite build --mode piloto",
     "preview": "vite preview"
   },
   "dependencies": {

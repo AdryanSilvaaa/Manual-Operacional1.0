@@ -27,6 +27,13 @@
   font-size: clamp(52px, 7vw, 88px);
 }
 
+.home-content .home-slogan {
+  margin: 6px 0 0;
+  color: var(--color-primary);
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 800;
+}
+
 .home-content p {
   max-width: 680px;
   color: var(--color-muted);
@@ -85,6 +92,11 @@
   gap: 18px;
 }
 
+/* Logo centralizada no card de login; o restante do formulário segue alinhado à esquerda. */
+.auth-card > .brand-logo {
+  justify-self: center;
+}
+
 /* ÁREAS INTERNAS ---------------------------------------------------------- */
 /* Padding comum das páginas autenticadas e administrativas. */
 .page-section,
@@ -141,7 +153,7 @@
   width: 58px;
   height: 58px;
   color: var(--color-primary);
-  background: #fceaf7;
+  background: color-mix(in srgb, var(--color-primary) 10%, #fff);
   border-radius: 12px;
   place-items: center;
 }
@@ -246,12 +258,19 @@
   border-radius: var(--radius);
 }
 
-.pdf-reader { overflow: hidden; background: #30343b; border: 1px solid var(--color-border); border-radius: var(--radius); }
-.pdf-toolbar { position: sticky; top: 0; z-index: 2; display: flex; padding: 12px 16px; color: #fff; background: #222731; align-items: center; justify-content: center; gap: 20px; }
+.pdf-reader { scroll-margin-top: 88px; overflow: hidden; background: #30343b; border: 1px solid var(--color-border); border-radius: var(--radius); }
+.pdf-toolbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; padding: 12px 16px; color: #fff; background: #222731; align-items: center; justify-content: center; gap: 12px 32px; }
+.pdf-toolbar-group { display: flex; align-items: center; gap: 20px; }
+.pdf-zoom { gap: 6px; }
+.pdf-toolbar .pdf-zoom-value { min-width: 64px; justify-content: center; font-weight: 700; }
+/* Navegação repetida no fim do documento; não fica presa no topo. */
+.pdf-bottom-nav { position: static; }
 .pdf-toolbar button { display: inline-flex; padding: 8px 12px; color: #fff; background: #3b4250; border: 0; border-radius: 8px; align-items: center; gap: 6px; }
 .pdf-toolbar button:disabled { opacity: .4; cursor: not-allowed; }
 .pdf-canvas-wrap { display: grid; min-height: 500px; padding: 20px 16px; overflow: auto; place-items: start center; }
-.pdf-canvas-wrap canvas { display: block; max-width: 100%; background: #fff; box-shadow: 0 5px 22px rgb(0 0 0 / 30%); }
+.pdf-canvas-wrap canvas { display: block; max-width: 100%; height: auto; background: #fff; box-shadow: 0 5px 22px rgb(0 0 0 / 30%); }
+/* Com zoom acima de 100% a página passa da largura da tela e a área rola para os lados. */
+.pdf-canvas-wrap.pdf-zoomed canvas { max-width: none; }
 .pdf-reader-state { display: flex; min-height: 420px; align-items: center; justify-content: center; gap: 10px; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -503,6 +522,14 @@ legend {
   transition: transform 200ms, background 200ms;
 }
 
+/* Gerenciar manuais: mesmos botões pequenos dentro da tabela; título e setores podem quebrar linha. */
+.manage-table .row-actions button { display: inline-flex; width: 34px; height: 34px; color: var(--color-danger); background: #fff0f4; border: 0; border-radius: 8px; align-items: center; justify-content: center; }
+.manage-table .row-actions button:hover { background: #ffdce7; }
+.manage-table td.wrap { min-width: 160px; white-space: normal; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.manual-form { scroll-margin-top: 96px; }
+.form-actions .secondary-button { display: inline-flex; min-height: 46px; padding: 11px 18px; align-items: center; gap: 6px; font-size: 13px; }
+
 .table-row button:hover {
   background: #ffdce7;
   transform: translateY(-1px);
@@ -544,6 +571,7 @@ fieldset > .secondary-button { display: inline-flex; align-items: center; gap: 6
 .sector-picker { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .sector-picker label { display: flex; flex-direction: row; align-items: center; gap: 6px; font-weight: 500; }
 .sector-picker input { width: auto; min-height: auto; }
+.sector-picker .sector-picker-all { flex-basis: 100%; font-weight: 700; }
 .modal-card.profile-card { position: relative; max-width: 420px; }
 .modal-close { position: absolute; top: 14px; right: 14px; display: grid; width: 34px; height: 34px; color: var(--color-muted); background: transparent; border: 0; border-radius: 8px; place-items: center; cursor: pointer; }
 .modal-close:hover { background: #f1f4fb; }
@@ -554,6 +582,11 @@ fieldset > .secondary-button { display: inline-flex; align-items: center; gap: 6
 .sector-chips li { display: inline-flex; padding: 5px 10px; background: #eef2fb; border-radius: 999px; font-size: 13px; align-items: center; gap: 6px; }
 .exam-answers-panel { margin-top: 16px; padding: 16px; background: #f7f9ff; border-radius: 10px; overflow-wrap: anywhere; }
 .exam-answers-panel h3 { margin: 0 0 8px; color: var(--color-navy); font-size: 15px; }
+/* Prova: tela de início com as regras e faixa de aviso enquanto a prova está aberta. */
+.exam-start ul { display: grid; margin: 0; padding-left: 20px; gap: 8px; color: var(--color-text); line-height: 1.5; }
+.exam-start .primary-button { justify-self: start; }
+.exam-lock-banner { display: flex; max-width: 760px; margin: 0 auto 16px; padding: 12px 16px; color: #8a5300; background: #fff6d8; border: 1px solid #f3dc94; border-radius: 10px; font-weight: 700; align-items: center; gap: 8px; }
+.status-encerrada { color: var(--color-danger); background: #fff0f4; }
 .exam-prompt { margin: 0 0 4px; color: var(--color-navy); font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Abas do Painel de Uso. */
@@ -574,3 +607,51 @@ fieldset > .secondary-button { display: inline-flex; align-items: center; gap: 6
 .modal-card h2 { margin: 0; color: var(--color-navy); font-size: 20px; }
 .modal-card p { margin: 0; color: var(--color-muted); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+/* Importação de usuários por planilha (Configurações > Usuários). */
+.import-panel { margin-top: 20px; }
+.import-rules { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.import-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.import-actions .secondary-button { display: inline-flex; min-height: 46px; padding: 11px 18px; font-size: 13px; align-items: center; gap: 6px; }
+.import-ok { color: var(--color-success); font-weight: 700; }
+.import-error { color: var(--color-danger); font-weight: 700; white-space: normal; }
+
+/* Aparência (Configurações > Aparência): cores, logos e pré-visualização. */
+.branding-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+.branding-settings { display: grid; gap: 20px; min-width: 0; }
+.branding-panel h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.color-field { display: grid; grid-template-columns: minmax(0, 1fr) 46px 96px auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--color-border); }
+.color-field label { color: var(--color-text); font-size: 14px; font-weight: 600; }
+.color-field input[type="color"] { width: 46px; height: 36px; padding: 2px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; }
+.color-field .color-hex { width: 96px; padding: 8px; font-family: monospace; text-transform: lowercase; }
+.branding-warning { color: var(--color-danger); }
+.logo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.logo-field { display: grid; gap: 8px; align-content: start; }
+.logo-field strong { color: var(--color-navy); }
+.logo-preview { display: grid; height: 96px; padding: 12px; background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: 12px; place-items: center; }
+.logo-preview-dark { background: linear-gradient(180deg, var(--sidebar-bg-start), var(--sidebar-bg-end)); }
+.logo-preview img { max-width: 100%; max-height: 72px; object-fit: contain; }
+.logo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.file-button { cursor: pointer; }
+.file-button input { display: none; }
+.branding-preview { position: sticky; top: calc(var(--topbar-height) + 16px); display: grid; gap: 12px; }
+.preview-shell { display: grid; grid-template-columns: 120px minmax(0, 1fr); overflow: hidden; border: 1px solid var(--color-border); border-radius: 12px; }
+.preview-sidebar { display: grid; gap: 6px; padding: 14px 8px; color: var(--sidebar-text); background: linear-gradient(180deg, var(--sidebar-bg-start), var(--sidebar-bg-end)); font-size: 12px; font-weight: 700; align-content: start; }
+.preview-sidebar img { max-width: 100%; max-height: 34px; margin-bottom: 8px; object-fit: contain; }
+.preview-sidebar span { padding: 8px; border-radius: 8px; }
+.preview-sidebar .preview-hover { color: var(--sidebar-text-hover); background: var(--sidebar-hover-bg); }
+.preview-content { display: grid; gap: 10px; padding: 16px; background: var(--color-background); align-content: start; }
+.preview-content .eyebrow, .preview-content h3 { margin: 0; }
+.preview-content h3 { color: var(--color-navy); font-size: 20px; }
+.preview-content .preview-button-hover { background: var(--color-primary-hover); }
+.branding-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.branding-actions .secondary-button { display: inline-flex; min-height: 46px; padding: 11px 18px; align-items: center; gap: 6px; font-size: 13px; }
+@media (max-width: 960px) {
+  .branding-layout { grid-template-columns: 1fr; }
+  .branding-preview { position: static; }
+}
+@media (max-width: 560px) {
+  .color-field { grid-template-columns: 1fr 46px 96px; }
+  .color-field .secondary-button { grid-column: 1 / -1; justify-self: start; }
+  .logo-grid { grid-template-columns: 1fr; }
+}

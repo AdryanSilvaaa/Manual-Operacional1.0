@@ -97,4 +97,23 @@
   .bar-row {
     grid-template-columns: 90px 1fr 40px;
   }
+
+  /* Barra do leitor de PDF compacta para caber Anterior, página e Próxima numa linha. */
+  .pdf-toolbar {
+    padding: 10px 8px;
+    gap: 10px;
+  }
+
+  .pdf-toolbar-group {
+    gap: 8px;
+  }
+
+  .pdf-toolbar button {
+    padding: 8px 10px;
+  }
+
+  .pdf-toolbar strong {
+    font-size: 14px;
+    white-space: nowrap;
+  }
 }

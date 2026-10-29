@@ -1,7 +1,7 @@
 {
   "name": "manual-operacional-backend",
   "version": "1.0.0",
-  "description": "API do Manual Operacional Digital",
+  "description": "API do Prumo (manuais e treinamentos operacionais)",
   "main": "src/server.js",
   "engines": {
     "node": ">=20"

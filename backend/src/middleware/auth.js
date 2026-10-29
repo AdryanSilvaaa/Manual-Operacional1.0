@@ -47,10 +47,10 @@ export function requireSupport(req, res, next) {
   next();
 }
 
-// Suporte e gerente de setor podem cadastrar materiais operacionais.
+// Suporte, editor de conteúdo e gerente de setor cadastram materiais e acompanham o Painel de uso.
 export function requireManualManager(req, res, next) {
-  if (!['suporte', 'gerente_setor', 'gerente'].includes(req.user?.role)) {
-    return res.status(403).json({ message: 'Acesso permitido apenas para gerente de setor ou suporte' });
+  if (!['suporte', 'editor_conteudo', 'gerente_setor', 'gerente'].includes(req.user?.role)) {
+    return res.status(403).json({ message: 'Acesso permitido apenas para suporte, editor de conteúdo ou gerente de setor' });
   }
   next();
 }

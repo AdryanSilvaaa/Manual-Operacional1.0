@@ -4,6 +4,8 @@
  */
 export const MAX_QUESTIONS = 10;
 export const QUESTION_TYPES = Object.freeze({ MULTIPLE_CHOICE: 'multipla_escolha', OPEN: 'aberta' });
+/** Situação da entrega: começa em andamento e termina enviada pelo colaborador ou encerrada ao sair da página. */
+export const SUBMISSION_STATUS = Object.freeze({ IN_PROGRESS: 'em_andamento', SENT: 'enviada', CLOSED: 'encerrada' });
 const OPTION_COUNT = 4;
 
 function isBlank(value) {
@@ -57,28 +59,32 @@ export function isExamOpen(exam, now = new Date()) {
 }
 
 /**
- * Corrige as respostas recebidas como { [questionId]: indice | texto }.
- * Exige resposta em todas as perguntas; a nota considera só as de múltipla escolha.
+ * Corrige as respostas recebidas como { [questionId]: indice | texto }. A nota considera só as de múltipla escolha.
+ * No envio normal exige resposta em todas as perguntas. Com partial (prova encerrada ao sair da página),
+ * guarda só o que foi respondido e conta as perguntas sem resposta como erradas.
  */
-export function gradeSubmission(questions, answers = {}) {
+export function gradeSubmission(questions, answers = {}, { partial = false } = {}) {
   const graded = [];
   for (const [index, question] of questions.entries()) {
-    const value = answers[question.id];
+    const value = answers?.[question.id];
     if (question.type === QUESTION_TYPES.OPEN) {
-      if (isBlank(value)) return { error: `Responda a pergunta ${index + 1}` };
+      if (isBlank(value)) {
+        if (partial) continue;
+        return { error: `Responda a pergunta ${index + 1}` };
+      }
       graded.push({ questionId: question.id, selectedOption: null, answerText: value.trim() });
       continue;
     }
     const selected = Number(value);
     if (value === undefined || value === null || value === '' || !Number.isInteger(selected) || selected < 0 || selected >= OPTION_COUNT) {
+      if (partial) continue;
       return { error: `Responda a pergunta ${index + 1}` };
     }
     graded.push({ questionId: question.id, selectedOption: selected, answerText: null, correct: selected === Number(question.correct_option) });
   }
-  const objective = graded.filter((answer) => answer.selectedOption !== null);
   return {
     answers: graded,
-    objectiveTotal: objective.length,
-    objectiveCorrect: objective.filter((answer) => answer.correct).length
+    objectiveTotal: questions.filter((question) => question.type !== QUESTION_TYPES.OPEN).length,
+    objectiveCorrect: graded.filter((answer) => answer.correct).length
   };
 }

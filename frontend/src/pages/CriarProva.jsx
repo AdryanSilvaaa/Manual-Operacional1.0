@@ -1,12 +1,12 @@
 /**
- * Cadastro de prova pelo gerente de setor ou suporte.
- * Gerente escolhe um dos seus setores; suporte escolhe um setor ou todos. Limites e tipos espelham backend/src/utils/exam.js.
+ * Cadastro de prova pelo gerente de setor, editor de conteúdo ou suporte.
+ * Gerente escolhe um dos seus setores; suporte e editor de conteúdo escolhem um setor ou todos. Limites e tipos espelham backend/src/utils/exam.js.
  */
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
-import { ROLES } from '../constants/roles.js';
+import { ALL_SECTOR_ROLES } from '../constants/roles.js';
 import { MAX_QUESTIONS, OPTION_LETTERS, QUESTION_TYPES } from '../constants/exam.js';
 import BackButton from '../components/BackButton.jsx';
 
@@ -24,14 +24,14 @@ export default function CriarProva() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [sectors, setSectors] = useState([]);
-  const isSupport = user.role === ROLES.SUPPORT;
+  const allSectors = ALL_SECTOR_ROLES.includes(user.role);
   const ownSectors = user.setores || [];
 
   useEffect(() => {
-    if (!isSupport) return;
+    if (!allSectors) return;
     fetch(`${apiUrl}/api/sectors`, { headers: createAuthHeaders(token) })
       .then(readResponse).then(setSectors).catch((requestError) => setError(requestError.message));
-  }, [apiUrl, token, isSupport]);
+  }, [apiUrl, token, allSectors]);
 
   function updateQuestion(index, changes) {
     setQuestions((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...changes } : item)));
@@ -60,7 +60,7 @@ export default function CriarProva() {
     try {
       const response = await fetch(`${apiUrl}/api/exams`, { method: 'POST', headers: createAuthHeaders(token), body: JSON.stringify(payload) });
       await readResponse(response);
-      const audience = isSupport && form.sectorId === ALL_SECTORS ? 'de todos os setores' : 'do setor';
+      const audience = allSectors && form.sectorId === ALL_SECTORS ? 'de todos os setores' : 'do setor';
       setForm(INITIAL_FORM);
       setQuestions([newQuestion()]);
       setMessage(`Prova criada. Os colaboradores ${audience} serão avisados no período de realização.`);
@@ -73,16 +73,16 @@ export default function CriarProva() {
     {message && <p className="notice">{message}</p>}
     {error && <p className="alert">{error}</p>}
     <form className="admin-panel manual-form" onSubmit={handleSubmit}>
-      {isSupport && <label>Setor<select value={form.sectorId} onChange={(event) => setForm({ ...form, sectorId: event.target.value })}>
+      {allSectors && <label>Setor<select value={form.sectorId} onChange={(event) => setForm({ ...form, sectorId: event.target.value })}>
         <option value={ALL_SECTORS}>Todos os setores</option>
         {sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.nome}</option>)}
       </select></label>}
-      {!isSupport && ownSectors.length > 1 && <label>Setor<select value={form.sectorId === ALL_SECTORS ? '' : form.sectorId} onChange={(event) => setForm({ ...form, sectorId: event.target.value })} required>
+      {!allSectors && ownSectors.length > 1 && <label>Setor<select value={form.sectorId === ALL_SECTORS ? '' : form.sectorId} onChange={(event) => setForm({ ...form, sectorId: event.target.value })} required>
         <option value="">Selecione</option>
         {ownSectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.nome}</option>)}
       </select></label>}
-      {!isSupport && ownSectors.length <= 1 && <label>Setor<input value={ownSectors[0]?.nome || 'Usuário sem setor definido'} disabled /></label>}
-      <p className="hint">{isSupport && form.sectorId === ALL_SECTORS
+      {!allSectors && ownSectors.length <= 1 && <label>Setor<input value={ownSectors[0]?.nome || 'Usuário sem setor definido'} disabled /></label>}
+      <p className="hint">{allSectors && form.sectorId === ALL_SECTORS
         ? 'A prova fica disponível para os colaboradores de todos os setores.'
         : 'A prova fica disponível apenas para os colaboradores deste setor.'}</p>
       <label>Título<input value={form.titulo} onChange={(event) => setForm({ ...form, titulo: event.target.value })} required /></label>
@@ -110,7 +110,7 @@ export default function CriarProva() {
         </div>)}
         {questions.length < MAX_QUESTIONS && <button type="button" className="secondary-button" onClick={() => setQuestions((current) => [...current, newQuestion()])}><Plus size={15} /> Adicionar pergunta</button>}
       </fieldset>
-      <button className="primary-button" disabled={!isSupport && !ownSectors.length}><Plus size={18} />Criar prova</button>
+      <button className="primary-button" disabled={!allSectors && !ownSectors.length}><Plus size={18} />Criar prova</button>
     </form>
   </section>;
 }

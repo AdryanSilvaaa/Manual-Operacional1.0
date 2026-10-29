@@ -2,7 +2,7 @@
  * Banco temporário em memória para desenvolvimento quando o PostgreSQL está ausente.
  * Alterar dados, contadores ou métodos aqui muda somente o modo de demonstração.
  */
-import { hasSector, isSupport } from '../utils/access.js';
+import { canManageManual, hasSector, seesAllSectors } from '../utils/access.js';
 
 const ADMIN_PASSWORD_HASH = '$2a$10$aEV41I/MA/qN00fWXu5UCuO/kPA0KT.DG5Br/zho02MdrowLgDIeC';
 
@@ -38,6 +38,7 @@ const exams = [];
 const examQuestions = [];
 const examSubmissions = [];
 const examAnswers = [];
+const settings = new Map();
 
 export function demoEnabled() {
   return process.env.DEV_DEMO_MODE === 'true';
@@ -89,6 +90,16 @@ export const demoStore = {
     return users.map(toSafeUser).sort((left, right) => left.nome.localeCompare(right.nome));
   },
 
+  getSetting(key) {
+    return settings.get(key) || null;
+  },
+
+  saveSetting(key, value) {
+    const setting = { value, updated_at: new Date().toISOString() };
+    settings.set(key, setting);
+    return setting;
+  },
+
   listSectors() {
     return [...sectors].sort((left, right) => left.nome.localeCompare(right.nome));
   },
@@ -122,6 +133,7 @@ export const demoStore = {
     if (!user) return null;
     assertUniqueIdentifier(data.identificador, user.id);
     Object.assign(user, { nome: data.nome, identificador: data.identificador, role: data.role, sector_ids: data.sectorIds.map(Number) });
+    if (data.senhaHash) user.senha = data.senhaHash;
     return toSafeUser(user);
   },
 
@@ -154,22 +166,24 @@ export const demoStore = {
     manuals.forEach((manual) => { if (Number(manual.system_id) === Number(id)) manual.system_id = null; });
   },
 
-  // Suporte consulta todos os manuais; os demais perfis leem apenas os ativos dos seus setores.
+  // Suporte e editor de conteúdo consultam todos os manuais; os demais perfis leem apenas os ativos dos seus setores.
   listManualsForUser(user, systemId = null) {
-    const canReadManual = (manual) => isSupport(user) || (manual.active !== false && hasSector(user, manual.sector_id));
+    const canReadManual = (manual) => seesAllSectors(user) || (manual.active !== false && manual.sector_ids.some((id) => hasSector(user, id)));
     return manuals
       .filter((manual) => (!systemId || Number(manual.system_id) === Number(systemId)) && canReadManual(manual))
       .map((manual) => {
         const progress = this.getProgress(user.id, manual.id);
-        const pdfPercent = progress?.page_count
+        const pdfPercent = manual.pdf_url && progress?.page_count
           ? Math.min(100, (progress.pages_viewed.length / progress.page_count) * 100)
           : 0;
-        const videoPercent = Math.min(100, Number(progress?.video_progress) || 0);
+        const videoPercent = manual.video_url ? Math.min(100, Number(progress?.video_progress) || 0) : 0;
+        const parts = Math.max(1, Number(Boolean(manual.pdf_url)) + Number(Boolean(manual.video_url)));
         return {
           ...manual,
+          sector_names: manual.sector_ids.map((id) => this.findSectorById(id)?.nome).filter(Boolean),
           first_access_at: progress?.first_access_at || null,
           completed_at: progress?.completed_at || null,
-          progress_percent: Math.round((pdfPercent + videoPercent) / 2)
+          progress_percent: Math.round((pdfPercent + videoPercent) / parts)
         };
       });
   },
@@ -178,8 +192,9 @@ export const demoStore = {
     return this.listManualsForUser(user).find((manual) => Number(manual.id) === Number(id));
   },
 
-  createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, sectorId, criadoPor }) {
-    const manual = { id: nextManualId++, titulo, descricao, pdf_url: pdfUrl, video_url: videoUrl, system_id: Number(systemId), sector_id: sectorId, criado_por: criadoPor, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+  // Como no banco: sector_ids são todos os setores do manual e sector_id o primeiro escolhido.
+  createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, criadoPor }) {
+    const manual = { id: nextManualId++, titulo, descricao, pdf_url: pdfUrl, video_url: videoUrl, system_id: Number(systemId), sector_id: sectorIds[0], sector_ids: sectorIds.map(Number), criado_por: criadoPor, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     manuals.unshift(manual);
     return manual;
   },
@@ -187,8 +202,28 @@ export const demoStore = {
   updateManual(id, data) {
     const manual = manuals.find((item) => Number(item.id) === Number(id));
     if (!manual) return null;
-    Object.assign(manual, { titulo: data.titulo ?? manual.titulo, descricao: data.descricao ?? manual.descricao, pdf_url: data.pdfUrl ?? manual.pdf_url, video_url: data.videoUrl ?? manual.video_url, system_id: data.systemId ?? manual.system_id, sector_id: data.sectorId ?? manual.sector_id, updated_at: new Date().toISOString() });
+    Object.assign(manual, { titulo: data.titulo ?? manual.titulo, descricao: data.descricao ?? manual.descricao, pdf_url: data.pdfUrl ?? manual.pdf_url, video_url: data.videoUrl ?? manual.video_url, system_id: data.systemId ?? manual.system_id, sector_id: data.sectorIds?.[0] ?? manual.sector_id, sector_ids: data.sectorIds?.map(Number) ?? manual.sector_ids, active: data.active ?? manual.active, updated_at: new Date().toISOString() });
     return manual;
+  },
+
+  // Mesma regra do banco: gerente de setor só recebe manuais cujos setores são todos seus.
+  listManageableManuals(user) {
+    return manuals
+      .filter((manual) => canManageManual(user, manual.sector_ids))
+      .map((manual) => ({
+        ...manual,
+        active: manual.active !== false,
+        system_name: systems.find((system) => Number(system.id) === Number(manual.system_id))?.nome || null,
+        has_pdf: Boolean(manual.pdf_url),
+        has_video: Boolean(manual.video_url),
+        sector_names: manual.sector_ids.map((id) => this.findSectorById(id)?.nome).filter(Boolean)
+      }))
+      .sort((left, right) => left.titulo.localeCompare(right.titulo));
+  },
+
+  getManualSectorIds(id) {
+    const manual = manuals.find((item) => Number(item.id) === Number(id));
+    return manual ? { id: manual.id, titulo: manual.titulo, sector_ids: manual.sector_ids } : null;
   },
 
   deleteManual(id) {
@@ -200,7 +235,7 @@ export const demoStore = {
     return progressEntries.find((item) => Number(item.user_id) === Number(userId) && Number(item.manual_id) === Number(manualId)) || null;
   },
 
-  saveProgress({ userId, manualId, pdfCompleted, videoProgress, seconds, page, pageCount }) {
+  saveProgress({ userId, manualId, pdfCompleted, videoProgress, seconds, page, pageCount, hasPdf = true, hasVideo = true }) {
     let item = this.getProgress(userId, manualId);
     const now = new Date().toISOString();
     if (!item) {
@@ -214,7 +249,7 @@ export const demoStore = {
     item.video_progress = Math.max(item.video_progress, Math.min(100, Number(videoProgress) || 0));
     item.total_seconds += Math.max(0, Math.min(60, Number(seconds) || 0));
     item.last_access_at = now;
-    if (item.pdf_completed && item.video_progress >= 90 && !item.completed_at) item.completed_at = now;
+    if ((!hasPdf || item.pdf_completed) && (!hasVideo || item.video_progress >= 90) && !item.completed_at) item.completed_at = now;
     return item;
   },
 
@@ -246,13 +281,29 @@ export const demoStore = {
   },
 
   hasSubmission(examId, userId) {
-    return examSubmissions.some((item) => Number(item.exam_id) === Number(examId) && Number(item.user_id) === Number(userId));
+    return Boolean(this.findSubmission(examId, userId));
   },
 
-  createSubmission({ examId, userId, objectiveTotal, objectiveCorrect, answers }) {
-    if (this.hasSubmission(examId, userId)) throw Object.assign(new Error('duplicate key'), { code: '23505' });
-    const submission = { id: nextSubmissionId++, exam_id: Number(examId), user_id: Number(userId), objective_total: objectiveTotal, objective_correct: objectiveCorrect, submitted_at: new Date().toISOString() };
+  findSubmission(examId, userId) {
+    return examSubmissions.find((item) => Number(item.exam_id) === Number(examId) && Number(item.user_id) === Number(userId)) || null;
+  },
+
+  // Mesmas regras do banco: começa em andamento e termina uma vez só (enviada ou encerrada).
+  startSubmission(examId, userId) {
+    if (this.hasSubmission(examId, userId)) return null;
+    const submission = { id: nextSubmissionId++, exam_id: Number(examId), user_id: Number(userId), objective_total: 0, objective_correct: 0, status: 'em_andamento', started_at: new Date().toISOString(), submitted_at: null };
     examSubmissions.push(submission);
+    return submission;
+  },
+
+  finishSubmission({ examId, userId, status, objectiveTotal, objectiveCorrect, answers }) {
+    let submission = this.findSubmission(examId, userId);
+    if (submission && submission.status !== 'em_andamento') throw Object.assign(new Error('duplicate key'), { code: '23505' });
+    if (!submission) {
+      submission = { id: nextSubmissionId++, exam_id: Number(examId), user_id: Number(userId), started_at: null };
+      examSubmissions.push(submission);
+    }
+    Object.assign(submission, { status, objective_total: objectiveTotal, objective_correct: objectiveCorrect, submitted_at: new Date().toISOString() });
     answers.forEach((answer) => examAnswers.push({ submission_id: submission.id, question_id: answer.questionId, selected_option: answer.selectedOption, answer_text: answer.answerText }));
     return submission;
   },
@@ -276,6 +327,7 @@ export const demoStore = {
           .filter((submission) => userInScope(findRawUser(submission.user_id)))
           .map((submission) => ({
             ...submission,
+            status: submission.status === 'em_andamento' && new Date() > new Date(exam.ends_at) ? 'encerrada' : submission.status,
             user_name: users.find((item) => Number(item.id) === Number(submission.user_id))?.nome,
             answers: examAnswers.filter((answer) => answer.submission_id === submission.id)
           }))
@@ -284,17 +336,27 @@ export const demoStore = {
   },
 
   getProgressReport(user) {
-    // Uma linha por operador e manual dos setores dele; gerente de setor vê só os próprios setores.
-    const visibleSector = (sectorId) => user.role !== 'gerente_setor' || hasSector(user, sectorId);
-    const operators = users.filter((item) => item.role === 'usuario');
-    return operators.flatMap((operator) => manuals
-      .filter((manual) => operator.sector_ids.includes(Number(manual.sector_id)) && visibleSector(manual.sector_id))
-      .map((manual) => ({
-        user_id: operator.id, user_name: operator.nome, sector_name: this.findSectorById(manual.sector_id)?.nome,
-        manual_id: manual.id, manual_title: manual.titulo,
-        pdf_completed: false, video_progress: 0, first_access_at: null,
-        last_access_at: null, completed_at: null, total_seconds: 0,
-        ...(this.getProgress(operator.id, manual.id) || {})
-      })));
+    // Mesma regra do banco: qualquer perfil, manuais dos setores da pessoa mais os que ela abriu;
+    // gerente de setor vê só quem é dos próprios setores, nos manuais desses setores.
+    const managerScope = user.role === 'gerente_setor';
+    // Setores do manual pelos quais a pessoa o recebe (no escopo do gerente, quando for o caso).
+    const sharedSectors = (person, manual) => manual.sector_ids
+      .filter((id) => (person.sector_ids || []).includes(Number(id)) && (!managerScope || hasSector(user, id)));
+    const opened = (person, manual) => Boolean(this.getProgress(person.id, manual.id));
+    const sectorNames = (ids) => ids.map((id) => this.findSectorById(id)?.nome).filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    return users.flatMap((operator) => manuals
+      .filter((manual) => (managerScope ? sharedSectors(operator, manual).length > 0
+        : sharedSectors(operator, manual).length > 0 || opened(operator, manual)))
+      .map((manual) => {
+        const shared = sharedSectors(operator, manual);
+        const names = sectorNames(shared.length ? shared : manual.sector_ids);
+        return {
+          user_id: operator.id, user_name: operator.nome, user_role: operator.role, sector_names: names, sector_name: names.join(', '),
+          manual_id: manual.id, manual_title: manual.titulo,
+          pdf_completed: false, video_progress: 0, first_access_at: null,
+          last_access_at: null, completed_at: null, total_seconds: 0,
+          ...(this.getProgress(operator.id, manual.id) || {})
+        };
+      }));
   }
 };

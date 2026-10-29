@@ -3,6 +3,7 @@
  * A regra de acesso são os setores do usuário: sector_id NULL na prova vale para todos os setores.
  */
 import { query, withTransaction } from '../config/db.js';
+import { SUBMISSION_STATUS } from '../utils/exam.js';
 
 function groupBy(rows, key) {
   const groups = new Map();
@@ -63,19 +64,38 @@ export async function listExamQuestions(examId, includeAnswers = false) {
   return rows;
 }
 
-export async function hasSubmission(examId, userId) {
-  const { rows } = await query('SELECT 1 FROM exam_submissions WHERE exam_id = $1 AND user_id = $2', [examId, userId]);
-  return rows.length > 0;
+/** Entrega do colaborador nesta prova (em andamento, enviada ou encerrada), ou null se ele ainda não começou. */
+export async function findSubmission(examId, userId) {
+  const { rows } = await query('SELECT id, status FROM exam_submissions WHERE exam_id = $1 AND user_id = $2', [examId, userId]);
+  return rows[0] || null;
 }
 
-/** Grava a entrega e as respostas; a restrição UNIQUE impede duas entregas do mesmo colaborador. */
-export async function createSubmission({ examId, userId, objectiveTotal, objectiveCorrect, answers }) {
+/** Registra o início da prova. Devolve null se o colaborador já tinha começado (restrição UNIQUE). */
+export async function startSubmission(examId, userId) {
+  const { rows } = await query(
+    `INSERT INTO exam_submissions (exam_id, user_id, objective_total, objective_correct, status, started_at, submitted_at)
+     VALUES ($1, $2, 0, 0, $3, NOW(), NULL) ON CONFLICT (exam_id, user_id) DO NOTHING RETURNING id`,
+    [examId, userId, SUBMISSION_STATUS.IN_PROGRESS]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Finaliza a prova (enviada ou encerrada) com as respostas. Só altera entrega ainda em andamento;
+ * se ela já terminou, lança erro com código 23505, o mesmo de entrega duplicada.
+ */
+export async function finishSubmission({ examId, userId, status, objectiveTotal, objectiveCorrect, answers }) {
   return withTransaction(async (client) => {
     const { rows } = await client.query(
-      `INSERT INTO exam_submissions (exam_id, user_id, objective_total, objective_correct)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [examId, userId, objectiveTotal, objectiveCorrect]
+      `INSERT INTO exam_submissions (exam_id, user_id, objective_total, objective_correct, status, submitted_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (exam_id, user_id) DO UPDATE SET objective_total = EXCLUDED.objective_total,
+         objective_correct = EXCLUDED.objective_correct, status = EXCLUDED.status, submitted_at = NOW()
+       WHERE exam_submissions.status = '${SUBMISSION_STATUS.IN_PROGRESS}'
+       RETURNING *`,
+      [examId, userId, objectiveTotal, objectiveCorrect, status]
     );
+    if (!rows[0]) throw Object.assign(new Error('Prova já finalizada'), { code: '23505' });
     for (const answer of answers) {
       await client.query(
         `INSERT INTO exam_answers (submission_id, question_id, selected_option, answer_text)
@@ -117,8 +137,12 @@ export async function listExamResults(user) {
        FROM exam_questions WHERE exam_id = ANY($1::int[]) ORDER BY exam_id, position`, [examIds]
     ),
     query(
-      `SELECT sb.id, sb.exam_id, sb.user_id, u.nome AS user_name, sb.objective_total, sb.objective_correct, sb.submitted_at
-       FROM exam_submissions sb JOIN users u ON u.id = sb.user_id
+      // Quem começou e não voltou fica em andamento até o fim do período; depois disso aparece como encerrada.
+      `SELECT sb.id, sb.exam_id, sb.user_id, u.nome AS user_name, sb.objective_total, sb.objective_correct,
+              sb.started_at, sb.submitted_at,
+              CASE WHEN sb.status = '${SUBMISSION_STATUS.IN_PROGRESS}' AND NOW() > e.ends_at
+                THEN '${SUBMISSION_STATUS.CLOSED}' ELSE sb.status END AS status
+       FROM exam_submissions sb JOIN users u ON u.id = sb.user_id JOIN exams e ON e.id = sb.exam_id
        WHERE sb.exam_id = ANY($1::int[]) AND ($2::int[] IS NULL OR EXISTS (
          SELECT 1 FROM user_sectors us WHERE us.user_id = sb.user_id AND us.sector_id = ANY($2::int[])))
        ORDER BY u.nome`, [examIds, sectorFilter]

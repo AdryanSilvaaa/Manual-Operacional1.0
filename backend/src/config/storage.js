@@ -2,7 +2,7 @@
  * Salva e entrega PDFs e vídeos. Três destinos, escolhidos por STORAGE_DRIVER (ou detectados pelo .env):
  * - s3: bucket compatível com S3 (Cloudflare R2 no piloto). Upload direto do navegador e leitura por URL assinada.
  * - supabase: Supabase Storage com URL pública (legado).
- * - local: pasta backend/uploads, só para desenvolvimento (não funciona com mais de uma instância).
+ * - local: pasta backend/uploads. Serve para uma máquina só (desenvolvimento ou a VM de deploy/vm); não funciona com mais de uma instância.
  * Nos modos supabase e local, o arquivo chega pelo backend em disco temporário (middleware/upload.js).
  */
 import fs from 'fs/promises';

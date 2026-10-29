@@ -1,4 +1,6 @@
-# Manual Operacional Digital
+# Prumo
+
+**Quem segue o prumo, não erra o caminho.** Manuais e treinamentos operacionais em PDF e vídeo, com acesso por perfil e acompanhamento do aprendizado. Produto white label: nome e slogan em `frontend/src/constants/brand.js`, logo do cliente em `frontend/src/components/BrandLogo.jsx`.
 
 Sistema web com React.js no frontend, Node.js + Express no backend e PostgreSQL.
 

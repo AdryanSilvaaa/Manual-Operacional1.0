@@ -3,15 +3,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800&display=swap');
 
 :root {
-  /* Cor de botões principais, ícones de destaque e detalhes da marca. */
+  /* As cores abaixo marcadas com (Aparência) podem ser trocadas pelo suporte em Configurações > Aparência;
+     a tela grava a escolha no banco e sobrescreve estes valores padrão ao carregar o site. */
+  /* Cor de botões principais, ícones de destaque e detalhes da marca. (Aparência) */
   --color-primary: #cc3399;
-  /* Cor exibida ao passar o mouse sobre botões principais. */
+  /* Cor exibida ao passar o mouse sobre botões principais. (Aparência) */
   --color-primary-hover: #a8277f;
-  /* Cor de títulos, textos de navegação e início do degradê lateral. */
+  /* Texto e ícones dentro dos botões principais. (Aparência) */
+  --color-on-primary: #ffffff;
+  /* Cor de títulos e textos de destaque. (Aparência) */
   --color-navy: #222a69;
-  /* Cor final do degradê da sidebar; escurece a parte inferior do menu. */
+  /* Tom escuro usado em fundos institucionais. */
   --color-navy-deep: #171d4d;
-  /* Cor de links, subtítulos e indicadores informativos. */
+  /* Sidebar: degradê do fundo (topo e base), textos/ícones do menu e destaque ao passar o mouse. (Aparência) */
+  --sidebar-bg-start: #222a69;
+  --sidebar-bg-end: #171d4d;
+  --sidebar-text: #d9ddff;
+  --sidebar-text-hover: #ffffff;
+  --sidebar-hover-bg: rgb(255 255 255 / 13%);
+  /* Cor de links, subtítulos e indicadores informativos. (Aparência) */
   --color-sky: #00aaff;
   /* Fundo geral de todas as páginas. */
   --color-background: #f5f7fc;

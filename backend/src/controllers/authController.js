@@ -9,6 +9,7 @@ import { validateUserSectors } from './userController.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import { audit } from '../models/Audit.js';
 import { isStrongPassword } from '../utils/security.js';
+import { VALID_ROLES } from '../utils/access.js';
 
 // Tentativas de login por IP + usuário, guardadas na memória desta instância.
 const loginAttempts = new Map();
@@ -89,7 +90,7 @@ export async function registerManagerUser(req, res) {
     return res.status(400).json({ message: 'A senha deve ter 8 caracteres, uma letra e um número' });
   }
 
-  if (!['suporte', 'gerente_setor', 'usuario'].includes(role)) {
+  if (!VALID_ROLES.includes(role)) {
     return res.status(400).json({ message: 'Role invalida' });
   }
 

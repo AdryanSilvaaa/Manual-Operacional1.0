@@ -3,7 +3,7 @@
  * Altere campos e ações aqui; regras do servidor ficam em backend/controllers/systemController.js.
  */
 import { useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
@@ -16,6 +16,8 @@ export default function CadastroSistemas() {
   const [systems, setSystems] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [message, setMessage] = useState('');
+  // Sistema em edição na lista (cópia com nome e resumo alterados); null quando nenhum está sendo editado.
+  const [editing, setEditing] = useState(null);
 
   async function loadSystems() {
     const response = await fetch(`${apiUrl}/api/systems`, { headers: createAuthHeaders(token) });
@@ -35,6 +37,21 @@ export default function CadastroSistemas() {
       await readResponse(response);
       setForm(INITIAL_FORM);
       setMessage('Sistema cadastrado com sucesso.');
+      await loadSystems();
+    } catch (error) { setMessage(error.message); }
+  }
+
+  // Salva o nome e o resumo editados direto na linha da lista; os manuais continuam ligados ao mesmo sistema.
+  async function handleSave() {
+    if (!editing) return;
+    setMessage('');
+    try {
+      const response = await fetch(`${apiUrl}/api/systems/${editing.id}`, {
+        method: 'PUT', headers: createAuthHeaders(token), body: JSON.stringify({ nome: editing.nome, resumo: editing.resumo })
+      });
+      await readResponse(response);
+      setEditing(null);
+      setMessage('Sistema atualizado com sucesso.');
       await loadSystems();
     } catch (error) { setMessage(error.message); }
   }
@@ -63,7 +80,21 @@ export default function CadastroSistemas() {
         <button className="primary-button"><Plus size={18} />Cadastrar sistema</button>
       </form>
       <div className="admin-panel"><h2>Sistemas disponíveis para todos os setores</h2><div className="table-list">
-        {systems.map((system) => <div className="table-row" key={system.id}><span>{system.nome}</span><button type="button" onClick={() => handleDelete(system.id)} aria-label={`Remover ${system.nome}`}><Trash2 size={16} /></button></div>)}
+        {systems.map((system) => editing?.id === system.id
+          ? <div className="table-row table-row-editable" key={system.id}>
+            <div className="edit-stack">
+              <input value={editing.nome} onChange={(event) => setEditing({ ...editing, nome: event.target.value })} aria-label="Nome do sistema" placeholder="Nome" />
+              <textarea value={editing.resumo} onChange={(event) => setEditing({ ...editing, resumo: event.target.value })} aria-label="Resumo do sistema" placeholder="Resumo" />
+            </div>
+            <div className="row-actions">
+              <button type="button" onClick={handleSave} disabled={!editing.nome.trim()} aria-label="Salvar sistema" title="Salvar"><Save size={16} /></button>
+              <button type="button" onClick={() => setEditing(null)} aria-label="Cancelar edição" title="Cancelar"><X size={16} /></button>
+            </div>
+          </div>
+          : <div className="table-row" key={system.id}><span>{system.nome}</span><div className="row-actions">
+            <button type="button" onClick={() => setEditing({ id: system.id, nome: system.nome, resumo: system.resumo || '' })} aria-label={`Editar ${system.nome}`} title="Editar"><Pencil size={16} /></button>
+            <button type="button" onClick={() => handleDelete(system.id)} aria-label={`Remover ${system.nome}`} title="Remover"><Trash2 size={16} /></button>
+          </div></div>)}
       </div></div>
     </div>
   </section>;

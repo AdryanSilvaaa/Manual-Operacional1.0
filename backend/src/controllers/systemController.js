@@ -47,7 +47,12 @@ export async function store(req, res) {
 }
 
 export async function update(req, res) {
-  const { nome, resumo } = req.body;
+  const nome = req.body.nome === undefined ? undefined : String(req.body.nome).trim();
+  const resumo = req.body.resumo === undefined ? undefined : String(req.body.resumo ?? '').trim();
+
+  if (nome !== undefined && !nome) {
+    return res.status(400).json({ message: 'Nome do sistema e obrigatorio' });
+  }
 
   let system;
   try {

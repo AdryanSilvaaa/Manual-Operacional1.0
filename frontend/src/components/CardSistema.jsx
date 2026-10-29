@@ -10,8 +10,8 @@ export default function CardSistema({ system }) {
       </div>
       <div>
         <h2>{system.nome}</h2>
-        <p>{system.resumo || 'Sistema com manuais operacionais disponiveis.'}</p>
-        <span className="card-meta">{system.manuals_count || 0} manuais vinculados</span>
+        <p>{system.resumo || 'Sistema com manuais operacionais disponíveis.'}</p>
+        <span className="card-meta">{system.manuals_count || 0} {system.manuals_count === 1 ? 'manual vinculado' : 'manuais vinculados'}</span>
       </div>
     </Link>
   );

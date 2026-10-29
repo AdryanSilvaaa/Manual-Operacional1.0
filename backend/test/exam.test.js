@@ -47,3 +47,17 @@ test('corrige só as perguntas de múltipla escolha e exige todas as respostas',
   assert.equal(result.answers[2].answerText, 'Resposta livre');
   assert.match(gradeSubmission(questions, { 1: 2, 2: 0 }).error, /pergunta 3/);
 });
+
+test('prova encerrada ao sair guarda só o que foi respondido e conta o resto como errado', () => {
+  const questions = [
+    { id: 1, type: 'multipla_escolha', correct_option: 2 },
+    { id: 2, type: 'multipla_escolha', correct_option: 0 },
+    { id: 3, type: 'aberta', correct_option: null }
+  ];
+  const result = gradeSubmission(questions, { 1: 2 }, { partial: true });
+  assert.equal(result.error, undefined);
+  assert.equal(result.objectiveTotal, 2);
+  assert.equal(result.objectiveCorrect, 1);
+  assert.deepEqual(result.answers.map((answer) => answer.questionId), [1]);
+  assert.equal(gradeSubmission(questions, undefined, { partial: true }).answers.length, 0);
+});

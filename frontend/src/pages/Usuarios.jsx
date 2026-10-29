@@ -8,11 +8,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
 import SearchField from '../components/SearchField.jsx';
+import ImportarUsuarios from '../components/ImportarUsuarios.jsx';
+import SectorPicker from '../components/SectorPicker.jsx';
 
 const INITIAL_FORM = { nome: '', identificador: '', senha: '', role: 'usuario', sectorIds: [] };
 const PROFILE_OPTIONS = [
   { value: 'usuario', label: 'Usuário comum' },
   { value: 'gerente_setor', label: 'Gerente de setor' },
+  { value: 'editor_conteudo', label: 'Editor de conteúdo' },
   { value: 'suporte', label: 'Suporte' }
 ];
 
@@ -61,17 +64,17 @@ export default function Usuarios() {
     } catch (error) { setMessage(error.message); }
   }
 
-  // Salva nome, perfil, identificador e setores do usuário selecionado.
+  // Salva nome, perfil, identificador e setores do usuário selecionado; a senha só vai quando preenchida.
   async function handleSave() {
     if (!editingUser) return;
     try {
       const response = await fetch(`${apiUrl}/api/users/${editingUser.id}`, {
         method: 'PUT', headers: createAuthHeaders(token),
-        body: JSON.stringify({ nome: editingUser.nome, identificador: editingUser.identificador, role: editingUser.role, sectorIds: editingUser.sectorIds })
+        body: JSON.stringify({ nome: editingUser.nome, identificador: editingUser.identificador, role: editingUser.role, sectorIds: editingUser.sectorIds, ...(editingUser.senha ? { senha: editingUser.senha } : {}) })
       });
       await readResponse(response);
       setEditingUser(null);
-      setMessage('Usuário atualizado com sucesso.');
+      setMessage(editingUser.senha ? 'Usuário e senha atualizados com sucesso.' : 'Usuário atualizado com sucesso.');
       await loadData();
     } catch (error) { setMessage(error.message); }
   }
@@ -87,15 +90,6 @@ export default function Usuarios() {
     } catch (error) { setMessage(error.message); }
   }
 
-  // Operador e gerente de setor precisam de pelo menos um setor; suporte pode ficar sem nenhum.
-  function SectorPicker({ value, onChange }) {
-    const toggle = (id) => onChange(value.includes(id) ? value.filter((item) => item !== id) : [...value, id]);
-    if (!sectors.length) return <p className="hint">Cadastre os setores em Configurações &gt; Setores.</p>;
-    return <div className="sector-picker">{sectors.map((sector) => <label key={sector.id}>
-      <input type="checkbox" checked={value.includes(sector.id)} onChange={() => toggle(sector.id)} />{sector.nome}
-    </label>)}</div>;
-  }
-
   function RoleSelect({ value, onChange }) {
     return <select value={value} onChange={(event) => onChange(event.target.value)}>{PROFILE_OPTIONS.map((profile) => <option key={profile.value} value={profile.value}>{profile.label}</option>)}</select>;
   }
@@ -109,7 +103,7 @@ export default function Usuarios() {
         <h2>Novo usuário</h2>
         <label>Nome<input value={form.nome} onChange={(event) => updateCreateForm('nome', event.target.value)} required /></label>
         <label>Usuário para login<input value={form.identificador} onChange={(event) => updateCreateForm('identificador', event.target.value)} autoComplete="off" required /></label>
-        <fieldset><legend>Setores</legend><SectorPicker value={form.sectorIds} onChange={(value) => updateCreateForm('sectorIds', value)} /></fieldset>
+        <fieldset><legend>Setores</legend><SectorPicker sectors={sectors} value={form.sectorIds} onChange={(value) => updateCreateForm('sectorIds', value)} /></fieldset>
         <label>Senha<input type="password" value={form.senha} onChange={(event) => updateCreateForm('senha', event.target.value)} autoComplete="new-password" required /></label>
         <label>Perfil<RoleSelect value={form.role} onChange={(value) => updateCreateForm('role', value)} /></label>
         <button className="primary-button"><Plus size={18} />Cadastrar usuário</button>
@@ -125,12 +119,15 @@ export default function Usuarios() {
           {editingUser?.id === user.id ? <div className="edit-stack">
             <input value={editingUser.nome} onChange={(event) => updateEditingUser('nome', event.target.value)} />
             <input value={editingUser.identificador || ''} onChange={(event) => updateEditingUser('identificador', event.target.value)} />
-            <SectorPicker value={editingUser.sectorIds} onChange={(value) => updateEditingUser('sectorIds', value)} />
+            <SectorPicker sectors={sectors} value={editingUser.sectorIds} onChange={(value) => updateEditingUser('sectorIds', value)} />
             <RoleSelect value={editingUser.role} onChange={(value) => updateEditingUser('role', value)} />
+            <input type="password" autoComplete="new-password" value={editingUser.senha} onChange={(event) => updateEditingUser('senha', event.target.value)} placeholder="Nova senha (em branco mantém a atual)" aria-label="Nova senha" />
+            {editingUser.senha && <p className="hint">Use pelo menos 8 caracteres, uma letra e um número.</p>}
           </div> : <span>{user.nome} · {PROFILE_OPTIONS.find((profile) => profile.value === user.role)?.label || user.role} · {user.setores?.length ? user.setores.map((sector) => sector.nome).join(', ') : 'Sem setor'}</span>}
-          <div className="row-actions">{editingUser?.id === user.id ? <><button type="button" onClick={handleSave} aria-label="Salvar usuário"><Save size={16} /></button><button type="button" onClick={() => setEditingUser(null)} aria-label="Cancelar edição"><X size={16} /></button></> : <><button type="button" onClick={() => setEditingUser({ ...user, sectorIds: user.sector_ids || [] })} aria-label="Editar usuário"><Pencil size={16} /></button><button type="button" onClick={() => handleDelete(user)} aria-label="Remover usuário"><Trash2 size={16} /></button></>}</div>
+          <div className="row-actions">{editingUser?.id === user.id ? <><button type="button" onClick={handleSave} aria-label="Salvar usuário"><Save size={16} /></button><button type="button" onClick={() => setEditingUser(null)} aria-label="Cancelar edição"><X size={16} /></button></> : <><button type="button" onClick={() => setEditingUser({ ...user, sectorIds: user.sector_ids || [], senha: '' })} aria-label="Editar usuário"><Pencil size={16} /></button><button type="button" onClick={() => handleDelete(user)} aria-label="Remover usuário"><Trash2 size={16} /></button></>}</div>
         </div>)}
       </div></div>
     </div>
+    <ImportarUsuarios apiUrl={apiUrl} token={token} sectors={sectors} onImported={loadData} />
   </section>;
 }

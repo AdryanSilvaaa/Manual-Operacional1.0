@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Manual Operacional Digital API
+  title: Prumo API
   version: 1.0.0
   description: API de publicação, treinamento e acompanhamento de manuais operacionais.
 servers:
@@ -16,6 +16,7 @@ tags:
   - name: Progress
   - name: Exams
   - name: Uploads
+  - name: Branding
 paths:
   /health:
     get:
@@ -30,7 +31,7 @@ paths:
                 type: object
                 properties:
                   status: { type: string, example: ok }
-                  service: { type: string, example: Manual Operacional Digital API }
+                  service: { type: string, example: Prumo API }
   /health/ready:
     get:
       tags: [Health]
@@ -131,6 +132,37 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/User' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/users/import:
+    post:
+      tags: [Users]
+      summary: Importa usuários em massa a partir de planilha (suporte)
+      description: Com dryRun só confere as linhas. Sem dryRun grava as linhas válidas numa transação e devolve as senhas provisórias geradas (única vez que aparecem).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                dryRun: { type: boolean }
+                rows:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    properties:
+                      linha: { type: integer, description: Número da linha na planilha }
+                      nome: { type: string }
+                      login: { type: string }
+                      perfil: { type: string, description: 'Usuário comum, Gerente de setor ou Suporte; vazio = usuario' }
+                      setores: { type: string, description: Nomes de setores existentes separados por vírgula }
+                      senha: { type: string, description: Opcional; vazia gera senha provisória }
+      responses:
+        '200': { description: Conferência (dryRun) com total, validos e a situação de cada linha }
+        '201': { description: Usuários criados; traz criados, rows e acessos (nome, login, perfil, setores, senha provisória ou null) }
+        '400': { description: Sem linhas ou mais de 500 }
+        '409': { description: Login cadastrado durante a importação; nada foi gravado }
   /api/users/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
@@ -196,6 +228,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/System' }
+        '400': { description: Nome vazio }
+        '404': { description: Sistema não encontrado }
     delete:
       tags: [Systems]
       summary: Exclui sistema (suporte)
@@ -268,6 +302,20 @@ paths:
           description: Campo obrigatório ausente ou tipo de arquivo não permitido
         '413':
           description: Arquivo acima do limite (PDF 20 MB, vídeo 200 MB por padrão)
+  /api/manuals/manage:
+    get:
+      tags: [Manuals]
+      summary: Lista da tela Gerenciar Manuais (gerência)
+      description: Ativos e inativos, em ordem alfabética. Suporte e editor de conteúdo recebem todos; gerente de setor, só os manuais cujos setores são todos seus.
+      responses:
+        '200':
+          description: Manuais que o perfil pode alterar
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ManageableManual' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/manuals/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
@@ -283,10 +331,13 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [Manuals]
-      summary: Atualiza manual (suporte)
+      summary: Atualiza manual (gerência)
+      description: Suporte e editor de conteúdo alteram qualquer manual; gerente de setor, só manual cujos setores são todos seus. Grava auditoria manual_updated.
       requestBody:
         content:
           multipart/form-data:
+            schema: { $ref: '#/components/schemas/ManualUpdateForm' }
+          application/json:
             schema: { $ref: '#/components/schemas/ManualUpdateForm' }
       responses:
         '200':
@@ -294,11 +345,18 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Manual' }
+        '400':
+          description: Setor inexistente ou fora dos setores do gerente
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     delete:
       tags: [Manuals]
-      summary: Exclui manual (suporte)
+      summary: Exclui manual (gerência)
+      description: Mesma regra de acesso do PUT. Apaga em cascata setores, progresso e históricos; os arquivos ficam no armazenamento. Grava auditoria manual_deleted.
       responses:
         '204': { description: Manual excluído }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/uploads/config:
     get:
       tags: [Uploads]
@@ -354,6 +412,9 @@ paths:
     get:
       tags: [Progress]
       summary: Relatório gerencial de progresso
+      description: >-
+        Uma linha por pessoa de qualquer perfil e manual: os manuais dos setores dela, inclusive não iniciados,
+        mais os que ela abriu fora deles. Gerente de setor recebe só quem é dos próprios setores.
       responses:
         '200':
           description: Linhas do relatório
@@ -391,7 +452,7 @@ paths:
     post:
       tags: [Exams]
       summary: Cria prova
-      description: Gerente de setor (um dos seus setores, via sectorId; opcional se tiver só um) ou suporte (um setor ou todos). De 1 a 10 perguntas.
+      description: Gerente de setor (um dos seus setores, via sectorId; opcional se tiver só um), editor de conteúdo ou suporte (um setor ou todos). De 1 a 10 perguntas.
       requestBody:
         required: true
         content:
@@ -421,7 +482,7 @@ paths:
   /api/exams/results:
     get:
       tags: [Exams]
-      summary: Resultados das provas (gerente do setor ou suporte)
+      summary: Resultados das provas (gerente do setor, editor de conteúdo ou suporte)
       responses:
         '200':
           description: Provas com perguntas, entregas e respostas
@@ -436,10 +497,34 @@ paths:
       - $ref: '#/components/parameters/Id'
     get:
       tags: [Exams]
-      summary: Abre a prova para o colaborador, sem as respostas corretas
+      summary: Dados da tela de início da prova (sem as perguntas)
+      description: Se a prova tinha ficado em andamento (a pessoa saiu da página), ela é encerrada e a resposta é 409.
       responses:
         '200':
-          description: Prova e perguntas
+          description: Prova e quantidade de perguntas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Exam'
+                  - type: object
+                    properties:
+                      question_count: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Fora do período, já entregue ou encerrada ao sair da página
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/exams/{id}/start:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Exams]
+      summary: Inicia a prova (uma vez) e devolve as perguntas sem as respostas corretas
+      responses:
+        '201':
+          description: Prova em andamento
           content:
             application/json:
               schema:
@@ -452,7 +537,34 @@ paths:
                         items: { $ref: '#/components/schemas/ExamQuestion' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Fora do período ou já entregue
+          description: Fora do período, já iniciada, entregue ou encerrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/exams/{id}/leave:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Exams]
+      summary: Encerra a prova em andamento porque o colaborador saiu da página
+      description: Grava as respostas recebidas; perguntas sem resposta contam como erradas. A tela chama com fetch keepalive.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                answers:
+                  type: object
+                  additionalProperties:
+                    oneOf:
+                      - { type: integer, minimum: 0, maximum: 3 }
+                      - { type: string }
+      responses:
+        '204': { description: Prova encerrada }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Prova não iniciada ou já finalizada
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -461,7 +573,7 @@ paths:
       - $ref: '#/components/parameters/Id'
     post:
       tags: [Exams]
-      summary: Entrega a prova (uma vez por colaborador)
+      summary: Entrega a prova em andamento (uma vez por colaborador)
       requestBody:
         required: true
         content:
@@ -490,10 +602,38 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Fora do período ou já entregue
+          description: Fora do período, não iniciada, já entregue ou encerrada
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+  /api/branding:
+    get:
+      tags: [Branding]
+      summary: Aparência white label (cores e logos); público, usado também no login
+      security: []
+      responses:
+        '200':
+          description: Configuração salva; sem configuração, colors vem vazio e as telas usam o padrão
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Branding' }
+    put:
+      tags: [Branding]
+      summary: Substitui cores e logos (suporte); o que não for enviado volta ao padrão
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandingInput' }
+      responses:
+        '200':
+          description: Configuração salva
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Branding' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 components:
   securitySchemes:
     bearerAuth:
@@ -539,7 +679,7 @@ components:
         message: { type: string }
     Role:
       type: string
-      enum: [usuario, gerente_setor, suporte]
+      enum: [usuario, gerente_setor, editor_conteudo, suporte]
     LoginRequest:
       type: object
       required: [identificador, senha]
@@ -579,7 +719,7 @@ components:
         sectorIds:
           type: array
           items: { type: integer }
-          description: Obrigatório (um ou mais) para usuario e gerente_setor; opcional para suporte.
+          description: Obrigatório (um ou mais) para usuario e gerente_setor; opcional para editor_conteudo e suporte.
     UpdateUserRequest:
       type: object
       required: [nome, identificador, role]
@@ -590,7 +730,10 @@ components:
         sectorIds:
           type: array
           items: { type: integer }
-          description: Obrigatório (um ou mais) para usuario e gerente_setor; opcional para suporte.
+          description: Obrigatório (um ou mais) para usuario e gerente_setor; opcional para editor_conteudo e suporte.
+        senha:
+          type: string
+          description: Opcional. Redefine a senha (8+ caracteres, uma letra e um número). Vazia ou ausente mantém a atual.
     System:
       type: object
       properties:
@@ -617,33 +760,70 @@ components:
         id: { type: integer }
         titulo: { type: string }
         descricao: { type: string, nullable: true }
-        pdf_url: { type: string }
-        video_url: { type: string }
+        pdf_url: { type: string, nullable: true, description: Nulo quando o manual tem só vídeo }
+        video_url: { type: string, nullable: true, description: Nulo quando o manual tem só PDF }
         system_id: { type: integer, nullable: true }
-        sector_id: { type: integer }
+        sector_id: { type: integer, description: Primeiro setor escolhido }
+        sector_ids:
+          type: array
+          items: { type: integer }
+          description: Todos os setores do manual
+        sector_names:
+          type: array
+          items: { type: string }
         criado_por: { type: integer, nullable: true }
         version: { type: integer }
         active: { type: boolean }
         progress_percent: { type: integer, minimum: 0, maximum: 100 }
+    ManageableManual:
+      type: object
+      properties:
+        id: { type: integer }
+        titulo: { type: string }
+        descricao: { type: string, nullable: true }
+        system_id: { type: integer, nullable: true }
+        system_name: { type: string, nullable: true }
+        active: { type: boolean }
+        version: { type: integer }
+        has_pdf: { type: boolean }
+        has_video: { type: boolean }
+        criado_por_nome: { type: string, nullable: true }
+        sector_ids:
+          type: array
+          items: { type: integer }
+        sector_names:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     ManualForm:
       type: object
-      required: [titulo, systemId, setor, pdf, video]
+      description: Pelo menos um dos arquivos, pdf ou video, é obrigatório.
+      required: [titulo, systemId, sectorIds]
       properties:
         titulo: { type: string }
         descricao: { type: string }
         systemId: { type: integer }
-        setor: { type: string }
+        sectorIds:
+          type: array
+          items: { type: integer }
+          description: Um ou mais setores já cadastrados; o manual aparece para quem é de qualquer um deles. No multipart, repita o campo
+        setor: { type: string, description: Formato antigo (nome de um único setor), usado só quando sectorIds não vem }
         pdf: { type: string, format: binary }
         video: { type: string, format: binary }
     ManualKeysForm:
       type: object
-      description: Cadastro depois do upload direto ao bucket (modo s3); pdfKey e videoKey vêm de /api/uploads/presign.
-      required: [titulo, systemId, pdfKey, videoKey]
+      description: Cadastro depois do upload direto ao bucket (modo s3); pdfKey e videoKey vêm de /api/uploads/presign. Pelo menos uma das duas chaves é obrigatória.
+      required: [titulo, systemId]
       properties:
         titulo: { type: string }
         descricao: { type: string }
         systemId: { type: integer }
-        setor: { type: string }
+        sectorIds:
+          type: array
+          items: { type: integer }
+          description: Um ou mais setores já cadastrados; o manual aparece para quem é de qualquer um deles. No multipart, repita o campo
+        setor: { type: string, description: Formato antigo (nome de um único setor), usado só quando sectorIds não vem }
         pdfKey: { type: string, example: pdfs/2f6c1d0e-8a1b-4c5d-9e7f-0a1b2c3d4e5f.pdf }
         videoKey: { type: string, example: videos/2f6c1d0e-8a1b-4c5d-9e7f-0a1b2c3d4e5f.mp4 }
     ManualUpdateForm:
@@ -652,7 +832,11 @@ components:
         titulo: { type: string }
         descricao: { type: string }
         systemId: { type: integer }
-        setor: { type: string }
+        sectorIds:
+          type: array
+          items: { type: integer }
+          description: Substitui a lista de setores; o manual aparece para quem é de qualquer um deles. No multipart, repita o campo
+        setor: { type: string, description: Formato antigo (nome de um único setor), usado só quando sectorIds não vem }
         active: { type: boolean }
         pdf: { type: string, format: binary }
         video: { type: string, format: binary }
@@ -685,7 +869,12 @@ components:
         - type: object
           properties:
             user_name: { type: string }
-            sector_name: { type: string }
+            user_role: { type: string, enum: [usuario, gerente_setor, editor_conteudo, suporte, gerente] }
+            sector_names:
+              type: array
+              items: { type: string }
+              description: Setores do manual pelos quais a pessoa o recebe
+            sector_name: { type: string, description: sector_names separados por vírgula }
             manual_title: { type: string }
             pages_read: { type: integer }
             version: { type: integer }
@@ -767,7 +956,12 @@ components:
                   user_name: { type: string }
                   objective_total: { type: integer }
                   objective_correct: { type: integer }
-                  submitted_at: { type: string, format: date-time }
+                  status:
+                    type: string
+                    enum: [em_andamento, enviada, encerrada]
+                    description: encerrada = saiu da página antes de enviar; em andamento após o fim do período volta como encerrada
+                  started_at: { type: string, format: date-time, nullable: true }
+                  submitted_at: { type: string, format: date-time, nullable: true }
                   answers:
                     type: array
                     items:
@@ -776,5 +970,37 @@ components:
                         question_id: { type: integer }
                         selected_option: { type: integer, nullable: true }
                         answer_text: { type: string, nullable: true }
+    BrandingColors:
+      type: object
+      description: Cores em hexadecimal #rrggbb; chave ausente usa o padrão
+      properties:
+        sidebarStart: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Topo do degradê da sidebar }
+        sidebarEnd: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Base do degradê da sidebar }
+        sidebarText: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Texto dos menus }
+        sidebarHoverText: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Texto do menu no hover ou selecionado }
+        sidebarHoverBg: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Fundo do menu no hover ou selecionado }
+        primary: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Botões principais }
+        primaryHover: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Botões principais no hover }
+        primaryText: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Texto dos botões principais }
+        title: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Títulos }
+        accent: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Destaques e links }
+    BrandingInput:
+      type: object
+      properties:
+        colors: { $ref: '#/components/schemas/BrandingColors' }
+        logoLight:
+          type: string
+          nullable: true
+          description: Logo da sidebar (fundo escuro). Data URL base64 PNG, JPG, WebP ou SVG, até 512 KB
+        logoDark:
+          type: string
+          nullable: true
+          description: Logo do login e do cabeçalho (fundo claro). Mesmas regras
+    Branding:
+      allOf:
+        - $ref: '#/components/schemas/BrandingInput'
+        - type: object
+          properties:
+            updated_at: { type: string, format: date-time, nullable: true }
 security:
   - bearerAuth: []

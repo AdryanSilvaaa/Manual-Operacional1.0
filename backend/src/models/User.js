@@ -58,15 +58,15 @@ export async function createUser({ nome, identificador, senhaHash, role, sectorI
   });
 }
 
-// Atualiza dados administrativos e os setores que determinam os manuais visíveis.
-export async function updateUser(id, { nome, identificador, role, sectorIds }) {
+// Atualiza dados administrativos e os setores que determinam os manuais visíveis. senhaHash ausente mantém a senha.
+export async function updateUser(id, { nome, identificador, role, sectorIds, senhaHash }) {
   return withTransaction(async (client) => {
     const execute = client.query.bind(client);
     const { rows } = await execute(
       `UPDATE users SET nome = COALESCE($1, nome), identificador = COALESCE($2, identificador),
-        role = COALESCE($3, role)
+        role = COALESCE($3, role), senha = COALESCE($5, senha)
        WHERE id = $4 RETURNING id`,
-      [nome, identificador, role, id]
+      [nome, identificador, role, id, senhaHash ?? null]
     );
     if (!rows[0]) return null;
     await replaceUserSectors(execute, id, sectorIds);
@@ -80,4 +80,28 @@ export async function deleteUser(id) {
 
 export async function updatePassword(id, passwordHash) {
   await query('UPDATE users SET senha = $1 WHERE id = $2', [passwordHash, id]);
+}
+
+/**
+ * Cadastro em massa (importação por planilha): todos os usuários e setores numa transação,
+ * com poucas idas ao banco. Se um login já existir, nada é gravado.
+ */
+export async function createUsers(list) {
+  return withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `INSERT INTO users (nome, identificador, senha, role)
+       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[])
+       RETURNING id, identificador`,
+      [list.map((user) => user.nome), list.map((user) => user.identificador), list.map((user) => user.senhaHash), list.map((user) => user.role)]
+    );
+    const idByLogin = new Map(rows.map((row) => [row.identificador, row.id]));
+    const pairs = list.flatMap((user) => user.sectorIds.map((sectorId) => [idByLogin.get(user.identificador), sectorId]));
+    if (pairs.length) {
+      await client.query(
+        'INSERT INTO user_sectors (user_id, sector_id) SELECT * FROM UNNEST($1::int[], $2::int[]) ON CONFLICT DO NOTHING',
+        [pairs.map((pair) => pair[0]), pairs.map((pair) => pair[1])]
+      );
+    }
+    return rows.length;
+  });
 }

@@ -33,3 +33,23 @@ export async function uploadToBucket({ apiUrl, token, kind, file, onProgress }) 
   await putWithProgress(upload.url, upload.headers, file, onProgress);
   return upload.key;
 }
+
+/**
+ * Corpo do cadastro (POST) ou da edição (PUT) do manual. Com bucket (directUpload), os arquivos vão do navegador
+ * direto ao armazenamento e o corpo leva só as chaves; sem bucket, vai em multipart sem forçar Content-Type,
+ * para preservar o boundary do navegador. Arquivo não escolhido fica fora; cada setor vai como um campo sectorIds.
+ */
+export async function buildManualRequest({ apiUrl, token, directUpload, fields, pdf, video, onStatus }) {
+  if (!directUpload) {
+    const payload = new FormData();
+    Object.entries({ ...fields, pdf, video }).forEach(([key, value]) => {
+      if (Array.isArray(value)) value.forEach((item) => payload.append(key, item));
+      else if (value !== null && value !== undefined) payload.append(key, value);
+    });
+    return { headers: createAuthHeaders(token, false), body: payload };
+  }
+  const pdfKey = pdf ? await uploadToBucket({ apiUrl, token, kind: 'pdf', file: pdf, onProgress: (percent) => onStatus?.(`Enviando PDF... ${percent}%`) }) : undefined;
+  const videoKey = video ? await uploadToBucket({ apiUrl, token, kind: 'video', file: video, onProgress: (percent) => onStatus?.(`Enviando vídeo... ${percent}%`) }) : undefined;
+  onStatus?.('Salvando manual...');
+  return { headers: createAuthHeaders(token), body: JSON.stringify({ ...fields, pdfKey, videoKey }) };
+}

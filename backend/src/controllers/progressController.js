@@ -36,7 +36,9 @@ export async function update(req, res) {
     videoProgress: req.body.videoProgress,
     seconds: req.body.seconds,
     page: req.body.page,
-    pageCount: req.body.pageCount
+    pageCount: req.body.pageCount,
+    hasPdf: Boolean(manual.pdf_url),
+    hasVideo: Boolean(manual.video_url)
   };
   let progress;
   try {

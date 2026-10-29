@@ -1,5 +1,5 @@
 /**
- * Busca e exibe o PDF e o vídeo de um manual pelo ID da URL.
+ * Busca e exibe o PDF e/ou o vídeo de um manual pelo ID da URL (o manual pode ter só um dos dois).
  * Altere os players aqui; dimensões do PDF/vídeo ficam em styles/pages.css.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -108,14 +108,16 @@ export default function ManualViewer() {
         </div>
       </div>
 
-      <PdfReader url={resolveUrl(apiUrl, manual.pdf_url)} initialPage={progress.last_page || 1} onPageViewed={handlePageViewed} />
+      {manual.pdf_url && <>
+        <PdfReader url={resolveUrl(apiUrl, manual.pdf_url)} initialPage={progress.last_page || 1} onPageViewed={handlePageViewed} />
 
-      <div className="manual-progress-panel">
-        <div><FileCheck2 size={20} /><span>Leitura do PDF</span><strong>{progress.pdf_completed ? 'Concluída' : 'Pendente'}</strong></div>
-        {!progress.pdf_completed && <span className="hint">Visite todas as páginas para concluir a leitura ({progress.pages_viewed?.length || 0}/{progress.page_count || '…'}).</span>}
-      </div>
+        <div className="manual-progress-panel">
+          <div><FileCheck2 size={20} /><span>Leitura do PDF</span><strong>{progress.pdf_completed ? 'Concluída' : 'Pendente'}</strong></div>
+          {!progress.pdf_completed && <span className="hint">Visite todas as páginas para concluir a leitura ({progress.pages_viewed?.length || 0}/{progress.page_count || '…'}).</span>}
+        </div>
+      </>}
 
-      <div className="video-block">
+      {manual.video_url && <div className="video-block">
         <div className="section-title">
           <PlaySquare size={20} />
           <h2>Video do procedimento</h2>
@@ -128,7 +130,7 @@ export default function ManualViewer() {
           onTimeUpdate={trackVideo}
         />
         <div className="video-progress"><span>Progresso do vídeo</span><div><i style={{ width: `${Math.min(100, Number(progress.video_progress) || 0)}%` }} /></div><strong>{Math.round(Number(progress.video_progress) || 0)}%</strong></div>
-      </div>
+      </div>}
       {progress.completed_at && <p className="manual-complete"><CheckCircle2 size={20} /> Manual concluído</p>}
     </section>
   );

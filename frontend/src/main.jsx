@@ -7,14 +7,17 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import AppRoutes from './AppRoutes.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { BrandingProvider } from './context/BrandingContext.jsx';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <BrandingProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrandingProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

@@ -16,6 +16,7 @@ const ManualViewer = lazy(() => import('./components/ManualViewer.jsx'));
 const Admin = lazy(() => import('./pages/Admin.jsx'));
 const CadastroSistemas = lazy(() => import('./pages/CadastroSistemas.jsx'));
 const CriarManual = lazy(() => import('./pages/CriarManual.jsx'));
+const GerenciarManuais = lazy(() => import('./pages/GerenciarManuais.jsx'));
 const CriarProva = lazy(() => import('./pages/CriarProva.jsx'));
 const Manuais = lazy(() => import('./pages/Manuais.jsx'));
 const Setores = lazy(() => import('./pages/Setores.jsx'));
@@ -25,6 +26,7 @@ const PainelUso = lazy(() => import('./pages/PainelUso.jsx'));
 const AlterarSenha = lazy(() => import('./pages/AlterarSenha.jsx'));
 const Provas = lazy(() => import('./pages/Provas.jsx'));
 const RealizarProva = lazy(() => import('./pages/RealizarProva.jsx'));
+const Aparencia = lazy(() => import('./pages/Aparencia.jsx'));
 
 function PrivatePage({ children, roles }) {
   return <ProtectedRoute roles={roles}>
@@ -45,7 +47,9 @@ export default function AppRoutes() {
         <Route path="configuracoes/usuarios" element={<PrivatePage roles={FULL_ADMIN_ROLES}><Usuarios /></PrivatePage>} />
         <Route path="configuracoes/sistemas" element={<PrivatePage roles={FULL_ADMIN_ROLES}><CadastroSistemas /></PrivatePage>} />
         <Route path="configuracoes/setores" element={<PrivatePage roles={FULL_ADMIN_ROLES}><Setores /></PrivatePage>} />
+        <Route path="configuracoes/aparencia" element={<PrivatePage roles={FULL_ADMIN_ROLES}><Aparencia /></PrivatePage>} />
         <Route path="configuracoes/manuais" element={<PrivatePage roles={ADMIN_ROLES}><CriarManual /></PrivatePage>} />
+        <Route path="configuracoes/gerenciar-manuais" element={<PrivatePage roles={ADMIN_ROLES}><GerenciarManuais /></PrivatePage>} />
         <Route path="configuracoes/provas" element={<PrivatePage roles={ADMIN_ROLES}><CriarProva /></PrivatePage>} />
         <Route path="provas" element={<PrivatePage roles={[ROLES.USER]}><Provas /></PrivatePage>} />
         <Route path="provas/:id" element={<PrivatePage roles={[ROLES.USER]}><RealizarProva /></PrivatePage>} />
