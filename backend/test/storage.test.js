@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { isObjectKey, newObjectKey } from '../src/config/objectStorage.js';
-import { resolveFileUrl, sanitizePdfBuffer } from '../src/config/storage.js';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { deleteStoredFile, resolveFileUrl, sanitizePdfBuffer } from '../src/config/storage.js';
+
+const backendDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 test('newObjectKey gera chave na pasta e com a extensão do tipo', () => {
   assert.match(newObjectKey('pdf', 'application/pdf'), /^pdfs\/[0-9a-f-]{36}\.pdf$/);
@@ -26,4 +31,16 @@ test('sanitizePdfBuffer neutraliza a impressão automática sem mudar o tamanho'
   const sanitized = sanitizePdfBuffer(original);
   assert.equal(sanitized.length, original.length);
   assert.ok(!sanitized.toString('latin1').includes('this.print'));
+});
+
+test('deleteStoredFile apaga só arquivos locais gravados pelo sistema', async () => {
+  const name = '00000000-0000-4000-8000-000000000000.pdf';
+  const dir = path.join(backendDir, 'uploads', 'pdfs');
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, name), '%PDF-1.4');
+
+  await deleteStoredFile('/uploads/pdfs/../../package.json');
+  await deleteStoredFile(`/uploads/pdfs/${name}`);
+  await assert.rejects(fs.access(path.join(dir, name)));
+  await fs.access(path.join(backendDir, 'package.json'));
 });

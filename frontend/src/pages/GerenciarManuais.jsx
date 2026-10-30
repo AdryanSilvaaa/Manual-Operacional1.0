@@ -4,7 +4,7 @@
  * suporte e editor de conteúdo alteram todos; gerente de setor só os manuais que são apenas dos seus setores.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, EyeOff, Pencil, Save, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Save, Trash2, Undo2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLES } from '../constants/roles.js';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
@@ -16,6 +16,12 @@ import { MAX_PDF_MB, MAX_VIDEO_MB, MAX_VIDEO_MINUTES, validateManualFile } from 
 import { buildManualRequest, getUploadConfig } from '../utils/directUpload.js';
 
 const filesOf = (manual) => [manual.has_pdf && 'PDF', manual.has_video && 'Vídeo'].filter(Boolean).join(' e ') || '—';
+
+// Textos e tipos aceitos de cada arquivo do manual no formulário de edição.
+const FILE_KINDS = {
+  pdf: { name: 'PDF', accept: 'application/pdf', has: 'hasPdf', remove: 'removePdf', other: 'video' },
+  video: { name: 'vídeo', accept: 'video/mp4,video/webm,video/quicktime', has: 'hasVideo', remove: 'removeVideo', other: 'pdf' }
+};
 
 export default function GerenciarManuais() {
   const { apiUrl, token, user } = useAuth();
@@ -63,8 +69,35 @@ export default function GerenciarManuais() {
     setMessage('');
     setEditing({
       id: manual.id, titulo: manual.titulo, descricao: manual.descricao || '', systemId: String(manual.system_id || ''),
-      sectorIds: manual.sector_ids || [], hasPdf: manual.has_pdf, hasVideo: manual.has_video, pdf: null, video: null
+      sectorIds: manual.sector_ids || [], hasPdf: manual.has_pdf, hasVideo: manual.has_video, pdf: null, video: null,
+      removePdf: false, removeVideo: false
     });
+  }
+
+  // O arquivo continua no manual se já existe e não foi marcado para remoção, ou se um novo foi escolhido.
+  const keepsFile = (kind) => Boolean(editing[kind] || (editing[FILE_KINDS[kind].has] && !editing[FILE_KINDS[kind].remove]));
+
+  // Marca ou desmarca a remoção; marcar descarta um arquivo novo escolhido para o mesmo campo.
+  function toggleRemove(kind) {
+    setMessage('');
+    setEditing((current) => ({ ...current, [FILE_KINDS[kind].remove]: !current[FILE_KINDS[kind].remove], [kind]: null }));
+  }
+
+  function renderFileField(kind) {
+    const { name, accept, has, remove, other } = FILE_KINDS[kind];
+    const removing = editing[remove];
+    const isLastFile = !keepsFile(other);
+    const limit = kind === 'pdf' ? `Até ${MAX_PDF_MB} MB.` : `Até ${MAX_VIDEO_MINUTES} minutos e ${MAX_VIDEO_MB} MB.`;
+    return <div className="file-field">
+      {editing[has] && <div className={`current-file${removing ? ' removing' : ''}`}>
+        <span>{removing ? `${name[0].toUpperCase()}${name.slice(1)} atual será removido ao salvar.` : `Este manual tem ${name}.`}</span>
+        {removing
+          ? <button type="button" className="secondary-button" onClick={() => toggleRemove(kind)}><Undo2 size={16} />Desfazer</button>
+          : <button type="button" className="secondary-button" onClick={() => toggleRemove(kind)} disabled={isLastFile}
+              title={isLastFile ? 'O manual precisa ficar com pelo menos o PDF ou o vídeo' : undefined}><Trash2 size={16} />Remover {name}</button>}
+      </div>}
+      {!removing && <label>{editing[has] ? `Trocar ${name}` : `Adicionar ${name}`}<input type="file" accept={accept} onChange={(event) => chooseFile(kind, event.target)} /><span className="hint">{limit}</span></label>}
+    </div>;
   }
 
   // Mesma conferência de tamanho e duração do cadastro; fora do limite, o campo é limpo.
@@ -82,12 +115,16 @@ export default function GerenciarManuais() {
       setMessage('Selecione pelo menos um setor.');
       return;
     }
+    const removed = [editing.removePdf && 'o PDF', editing.removeVideo && 'o vídeo'].filter(Boolean).join(' e ');
+    if (removed && !window.confirm(`Remover ${removed} do manual "${editing.titulo}"?\n\nO arquivo é apagado do armazenamento e isso não pode ser desfeito. O progresso dos colaboradores na parte que fica é mantido.`)) return;
     setMessage('');
     setSending('Salvando...');
     try {
-      const { id, titulo, descricao, systemId, sectorIds, pdf, video } = editing;
+      const { id, titulo, descricao, systemId, sectorIds, pdf, video, removePdf, removeVideo } = editing;
+      // Campos de remoção só vão quando marcados.
+      const removal = { removePdf: removePdf || undefined, removeVideo: removeVideo || undefined };
       const { headers, body } = await buildManualRequest({
-        apiUrl, token, directUpload, fields: { titulo, descricao, systemId, sectorIds }, pdf, video, onStatus: setSending
+        apiUrl, token, directUpload, fields: { titulo, descricao, systemId, sectorIds, ...removal }, pdf, video, onStatus: setSending
       });
       await readResponse(await fetch(`${apiUrl}/api/manuals/${id}`, { method: 'PUT', headers, body }));
       setEditing(null);
@@ -136,9 +173,9 @@ export default function GerenciarManuais() {
       </fieldset>}
       <label>Título<input value={editing.titulo} onChange={(event) => setEditing({ ...editing, titulo: event.target.value })} required /></label>
       <label>Descrição<textarea value={editing.descricao} onChange={(event) => setEditing({ ...editing, descricao: event.target.value })} /></label>
-      <label>{editing.hasPdf ? 'Trocar PDF' : 'Adicionar PDF'}<input type="file" accept="application/pdf" onChange={(event) => chooseFile('pdf', event.target)} /><span className="hint">Até {MAX_PDF_MB} MB.</span></label>
-      <label>{editing.hasVideo ? 'Trocar vídeo' : 'Adicionar vídeo'}<input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(event) => chooseFile('video', event.target)} /><span className="hint">Até {MAX_VIDEO_MINUTES} minutos e {MAX_VIDEO_MB} MB.</span></label>
-      <p className="hint">Deixe os arquivos em branco para manter os atuais. Enviar um arquivo novo cria uma nova versão e zera o progresso dos colaboradores neste manual (o anterior fica guardado no histórico).</p>
+      {renderFileField('pdf')}
+      {renderFileField('video')}
+      <p className="hint">Deixe os arquivos em branco para manter os atuais. Enviar um arquivo novo cria uma nova versão e zera o progresso dos colaboradores neste manual (o anterior fica guardado no histórico). Remover um arquivo mantém o progresso na parte que fica.</p>
       <div className="form-actions">
         <button className="primary-button" disabled={Boolean(sending)}>{sending || <><Save size={18} />Salvar alterações</>}</button>
         <button type="button" className="secondary-button" onClick={() => setEditing(null)} disabled={Boolean(sending)}><X size={16} />Cancelar</button>

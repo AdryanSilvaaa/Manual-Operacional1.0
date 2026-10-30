@@ -202,7 +202,7 @@ export const demoStore = {
   updateManual(id, data) {
     const manual = manuals.find((item) => Number(item.id) === Number(id));
     if (!manual) return null;
-    Object.assign(manual, { titulo: data.titulo ?? manual.titulo, descricao: data.descricao ?? manual.descricao, pdf_url: data.pdfUrl ?? manual.pdf_url, video_url: data.videoUrl ?? manual.video_url, system_id: data.systemId ?? manual.system_id, sector_id: data.sectorIds?.[0] ?? manual.sector_id, sector_ids: data.sectorIds?.map(Number) ?? manual.sector_ids, active: data.active ?? manual.active, updated_at: new Date().toISOString() });
+    Object.assign(manual, { titulo: data.titulo ?? manual.titulo, descricao: data.descricao ?? manual.descricao, pdf_url: data.removePdf ? null : data.pdfUrl ?? manual.pdf_url, video_url: data.removeVideo ? null : data.videoUrl ?? manual.video_url, system_id: data.systemId ?? manual.system_id, sector_id: data.sectorIds?.[0] ?? manual.sector_id, sector_ids: data.sectorIds?.map(Number) ?? manual.sector_ids, active: data.active ?? manual.active, updated_at: new Date().toISOString() });
     return manual;
   },
 
@@ -223,7 +223,7 @@ export const demoStore = {
 
   getManualSectorIds(id) {
     const manual = manuals.find((item) => Number(item.id) === Number(id));
-    return manual ? { id: manual.id, titulo: manual.titulo, sector_ids: manual.sector_ids } : null;
+    return manual ? { id: manual.id, titulo: manual.titulo, pdf_url: manual.pdf_url, video_url: manual.video_url, sector_ids: manual.sector_ids } : null;
   },
 
   deleteManual(id) {

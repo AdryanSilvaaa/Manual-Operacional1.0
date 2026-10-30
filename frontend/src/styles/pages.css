@@ -268,9 +268,25 @@
 .pdf-toolbar button { display: inline-flex; padding: 8px 12px; color: #fff; background: #3b4250; border: 0; border-radius: 8px; align-items: center; gap: 6px; }
 .pdf-toolbar button:disabled { opacity: .4; cursor: not-allowed; }
 .pdf-canvas-wrap { display: grid; min-height: 500px; padding: 20px 16px; overflow: auto; place-items: start center; }
-.pdf-canvas-wrap canvas { display: block; max-width: 100%; height: auto; background: #fff; box-shadow: 0 5px 22px rgb(0 0 0 / 30%); }
+.pdf-page { position: relative; max-width: 100%; box-shadow: 0 5px 22px rgb(0 0 0 / 30%); --total-scale-factor: calc(var(--scale-factor) * var(--user-unit)); --scale-round-x: 1px; --scale-round-y: 1px; }
+.pdf-canvas-wrap canvas { display: block; max-width: 100%; height: auto; background: #fff; }
+/* Camadas do PDF.js sobre a página: texto transparente selecionável e áreas de link clicáveis. */
+.pdf-page .textLayer { position: absolute; inset: 0; overflow: clip; line-height: 1; text-align: initial; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; caret-color: CanvasText; z-index: 0; }
+.pdf-page .textLayer :is(span, br) { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.pdf-page .textLayer > :not(.markedContent), .pdf-page .textLayer .markedContent span:not(.markedContent) { z-index: 1; }
+.pdf-page .textLayer span.markedContent { top: 0; height: 0; }
+.pdf-page .textLayer ::selection { background: rgb(0 0 255 / 25%); }
+.pdf-page .textLayer br::selection { background: transparent; }
+.pdf-page .textLayer .endOfContent { position: absolute; display: block; inset: 100% 0 0; z-index: 0; cursor: default; user-select: none; }
+.pdf-page .textLayer.selecting .endOfContent { top: 0; }
+.pdf-page .annotationLayer { position: absolute; top: 0; left: 0; pointer-events: none; transform-origin: 0 0; }
+.pdf-page .annotationLayer section { position: absolute; box-sizing: border-box; pointer-events: auto; text-align: initial; transform-origin: 0 0; user-select: none; }
+.pdf-page .textLayer.selecting ~ .annotationLayer section { pointer-events: none; }
+.pdf-page .annotationLayer .linkAnnotation > a { position: absolute; top: 0; left: 0; width: 100%; height: 100%; font-size: 1em; }
+.pdf-page .annotationLayer .linkAnnotation > a:hover { background-color: rgb(255 255 0 / 20%); }
+.pdf-page .annotationLayer section .overlaidText { position: absolute; top: 0; left: 0; width: 0; height: 0; display: inline-block; overflow: hidden; }
 /* Com zoom acima de 100% a página passa da largura da tela e a área rola para os lados. */
-.pdf-canvas-wrap.pdf-zoomed canvas { max-width: none; }
+.pdf-canvas-wrap.pdf-zoomed canvas, .pdf-canvas-wrap.pdf-zoomed .pdf-page { max-width: none; }
 .pdf-reader-state { display: flex; min-height: 420px; align-items: center; justify-content: center; gap: 10px; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -528,6 +544,11 @@ legend {
 .manage-table td.wrap { min-width: 160px; white-space: normal; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .manual-form { scroll-margin-top: 96px; }
+.manual-form .file-field { display: grid; gap: 8px; min-width: 0; }
+.current-file { display: flex; flex-wrap: wrap; padding: 10px 12px; border: 1px dashed var(--color-border); border-radius: 10px; align-items: center; justify-content: space-between; gap: 8px 12px; font-size: 14px; font-weight: 600; }
+.current-file.removing { color: #9b1c1c; background: #fdecec; border-color: #f3b4b4; }
+.current-file .secondary-button { display: inline-flex; align-items: center; gap: 6px; }
+.current-file .secondary-button:disabled { cursor: not-allowed; opacity: 0.5; }
 .form-actions .secondary-button { display: inline-flex; min-height: 46px; padding: 11px 18px; align-items: center; gap: 6px; font-size: 13px; }
 
 .table-row button:hover {

@@ -113,6 +113,31 @@ export async function resolveFileUrl(value) {
   return objectStorage.createReadUrl(value);
 }
 
+// Só arquivos gravados por uploadFile: /uploads/pdfs/<uuid>.pdf ou /uploads/videos/<uuid>.mp4 (nada de "..").
+const LOCAL_FILE_PATTERN = /^\/uploads\/(pdfs|videos)\/([0-9a-f-]{36}\.[a-z0-9]{2,5})$/i;
+
+/**
+ * Apaga do armazenamento um arquivo que saiu do manual (chave do bucket, caminho /uploads/... ou URL pública do Supabase).
+ * Valores fora desses formatos são ignorados. Falhas não interrompem: o banco já foi atualizado.
+ */
+export async function deleteStoredFile(value) {
+  if (!value) return;
+  if (objectStorage.isObjectKey(value)) {
+    if (storageDriver === 's3') await objectStorage.deleteObject(value);
+    return;
+  }
+  const local = String(value).match(LOCAL_FILE_PATTERN);
+  if (local) {
+    await fs.unlink(path.join(__dirname, '..', '..', 'uploads', local[1], local[2])).catch(() => {});
+    return;
+  }
+  const marker = `/storage/v1/object/public/${supabaseBucket}/`;
+  const position = String(value).indexOf(marker);
+  if (supabase && position >= 0) {
+    await supabase.storage.from(supabaseBucket).remove([decodeURIComponent(value.slice(position + marker.length))]);
+  }
+}
+
 function httpError(status, message) {
   return Object.assign(new Error(message), { status });
 }

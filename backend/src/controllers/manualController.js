@@ -7,12 +7,13 @@ import {
   deleteManual,
   getManualForUser,
   getManualSectorIds,
+  isFileReferenced,
   listManageableManuals,
   listManualsForUser,
   updateManual,
   archiveAndUpdateManual
 } from '../models/Manual.js';
-import { confirmDirectUpload, resolveFileUrl, supportsDirectUpload, uploadFile } from '../config/storage.js';
+import { confirmDirectUpload, deleteStoredFile, resolveFileUrl, supportsDirectUpload, uploadFile } from '../config/storage.js';
 import { ALLOWED_TYPES, maxBytesFor } from '../middleware/upload.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import { findOrCreateSector, findSectorsByIds, listSectors } from '../models/Sector.js';
@@ -20,6 +21,8 @@ import { canManageManual, hasSector, parseSectorIds } from '../utils/access.js';
 import { audit } from '../models/Audit.js';
 
 const hasFile = (req, kind) => Boolean(req.files?.[kind]?.[0] || req.body?.[`${kind}Key`]);
+// removePdf/removeVideo chegam como true (JSON) ou "true" (multipart).
+const isTrue = (value) => value === true || value === 'true';
 
 /**
  * Arquivo do campo pdf ou video: chave já enviada direto ao bucket (pdfKey/videoKey) ou arquivo recebido pelo backend.
@@ -85,7 +88,21 @@ async function findManageableManual(req, res) {
 }
 
 // Registro de auditoria sem travar a operação quando o banco não estiver disponível (modo demonstração).
-const auditManual = (req, action, manual) => audit(req.user.id, action, 'manual', manual.id, { titulo: manual.titulo }).catch(() => {});
+const auditManual = (req, action, manual, details = {}) => audit(req.user.id, action, 'manual', manual.id, { titulo: manual.titulo, ...details }).catch(() => {});
+
+/**
+ * Apaga do armazenamento os arquivos que saíram do manual, se nenhuma versão arquivada ainda os usa.
+ * Roda depois de gravar no banco; uma falha aqui só deixa o arquivo sobrando, sem desfazer a edição.
+ */
+async function deleteUnusedFiles(values) {
+  for (const value of values.filter(Boolean)) {
+    try {
+      if (!(await isFileReferenced(value))) await deleteStoredFile(value);
+    } catch (error) {
+      if (!shouldUseDemoStore(error)) console.error('Falha ao apagar arquivo removido do manual', error);
+    }
+  }
+}
 
 // Troca as chaves do bucket por URLs assinadas temporárias; só é chamado depois de conferir o acesso ao manual.
 async function withFileUrls(manual) {
@@ -201,6 +218,17 @@ export async function update(req, res) {
   // Setores só mudam quando vierem na requisição (sectorIds ou o campo antigo setor).
   const sectors = req.body.sectorIds !== undefined || req.body.setor ? await resolveManualSectors(req) : null;
   if (sectors?.error) return res.status(400).json({ message: sectors.error });
+  // Remover só vale para o arquivo que o manual tem; não dá para remover e trocar o mesmo arquivo na mesma edição.
+  const removePdf = isTrue(req.body.removePdf) && Boolean(current.pdf_url);
+  const removeVideo = isTrue(req.body.removeVideo) && Boolean(current.video_url);
+  if ((removePdf && hasFile(req, 'pdf')) || (removeVideo && hasFile(req, 'video'))) {
+    return res.status(400).json({ message: 'Escolha entre trocar ou remover o arquivo, não os dois' });
+  }
+  const keepsPdf = hasFile(req, 'pdf') || (Boolean(current.pdf_url) && !removePdf);
+  const keepsVideo = hasFile(req, 'video') || (Boolean(current.video_url) && !removeVideo);
+  if (!keepsPdf && !keepsVideo) {
+    return res.status(400).json({ message: 'O manual precisa ficar com pelo menos o PDF ou o vídeo' });
+  }
   const pdfUrl = await receiveFile(req, 'pdf');
   const videoUrl = await receiveFile(req, 'video');
 
@@ -213,7 +241,9 @@ export async function update(req, res) {
       videoUrl,
       systemId,
       sectorIds: sectors?.ids,
-      active
+      active,
+      removePdf,
+      removeVideo
     };
     manual = pdfUrl || videoUrl
       ? await archiveAndUpdateManual(req.params.id, updateData)
@@ -230,7 +260,9 @@ export async function update(req, res) {
       videoUrl,
       systemId,
       sectorIds: sectors?.ids,
-      active
+      active,
+      removePdf,
+      removeVideo
     });
   }
 
@@ -239,6 +271,11 @@ export async function update(req, res) {
   }
 
   await auditManual(req, 'manual_updated', manual);
+  if (removePdf || removeVideo) {
+    const removed = [removePdf && 'pdf', removeVideo && 'video'].filter(Boolean);
+    await auditManual(req, 'manual_file_removed', manual, { removed });
+    await deleteUnusedFiles([removePdf && current.pdf_url, removeVideo && current.video_url]);
+  }
   res.json(manual);
 }
 

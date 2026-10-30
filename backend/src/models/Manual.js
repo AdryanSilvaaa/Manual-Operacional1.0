@@ -78,22 +78,38 @@ export async function createManual({ titulo, descricao, pdfUrl, videoUrl, system
   });
 }
 
-async function executeManualUpdate(execute, id, { titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, active }) {
+// removePdf/removeVideo tiram o arquivo do manual sem criar versão: o progresso na parte que fica é mantido.
+async function executeManualUpdate(execute, id, { titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, active, removePdf = false, removeVideo = false }) {
   const hasSystemId = systemId !== undefined;
   const hasSectorId = sectorIds !== undefined;
   const { rows } = await execute(
     `UPDATE manuals SET titulo = COALESCE($1, titulo), descricao = COALESCE($2, descricao),
-       pdf_url = COALESCE($3, pdf_url), video_url = COALESCE($4, video_url),
+       pdf_url = CASE WHEN $11::boolean THEN NULL ELSE COALESCE($3, pdf_url) END,
+       video_url = CASE WHEN $12::boolean THEN NULL ELSE COALESCE($4, video_url) END,
        system_id = CASE WHEN $5 THEN $6 ELSE system_id END,
        sector_id = CASE WHEN $7 THEN $8 ELSE sector_id END,
        active = COALESCE($9, active),
        version = CASE WHEN $3::text IS NOT NULL OR $4::text IS NOT NULL THEN version + 1 ELSE version END,
        updated_at = NOW()
      WHERE id = $10 RETURNING *`,
-    [titulo, descricao, pdfUrl, videoUrl, hasSystemId, systemId || null, hasSectorId, sectorIds?.[0] || null, active, id]
+    [titulo, descricao, pdfUrl, videoUrl, hasSystemId, systemId || null, hasSectorId, sectorIds?.[0] || null, active, id, Boolean(removePdf), Boolean(removeVideo)]
   );
   if (rows[0] && hasSectorId) await replaceManualSectors(execute, id, sectorIds);
+  if (rows[0] && (removePdf || removeVideo)) await completeProgressAfterRemoval(execute, id);
   return rows[0];
+}
+
+// Sem o arquivo removido, quem já tinha cumprido a parte que ficou passa a ter o manual concluído
+// (mesma regra de saveProgress: PDF lido e/ou 90% do vídeo, contando só o que o manual tem).
+async function completeProgressAfterRemoval(execute, id) {
+  await execute(
+    `UPDATE manual_progress mp SET completed_at = NOW()
+     FROM manuals m
+     WHERE m.id = mp.manual_id AND mp.manual_id = $1 AND mp.completed_at IS NULL
+       AND (m.pdf_url IS NULL OR mp.pdf_completed)
+       AND (m.video_url IS NULL OR mp.video_progress >= 90)`,
+    [id]
+  );
 }
 
 export async function updateManual(id, data) {
@@ -116,13 +132,24 @@ export async function listManageableManuals(user) {
   return rows;
 }
 
-// Título e setores do manual, usados para conferir quem pode editar ou excluir.
+// Título, arquivos e setores do manual, usados para conferir quem pode editar, excluir ou remover um arquivo.
 export async function getManualSectorIds(id) {
   const { rows } = await query(
-    `SELECT m.id, m.titulo, ARRAY(SELECT ms.sector_id FROM manual_sectors ms WHERE ms.manual_id = m.id) AS sector_ids
+    `SELECT m.id, m.titulo, m.pdf_url, m.video_url,
+            ARRAY(SELECT ms.sector_id FROM manual_sectors ms WHERE ms.manual_id = m.id) AS sector_ids
      FROM manuals m WHERE m.id = $1`, [id]
   );
   return rows[0] || null;
+}
+
+// Um mesmo arquivo pode estar no manual atual e em versões arquivadas; só sai do armazenamento quando ninguém mais o usa.
+export async function isFileReferenced(value) {
+  const { rows } = await query(
+    `SELECT EXISTS (SELECT 1 FROM manuals WHERE pdf_url = $1 OR video_url = $1)
+         OR EXISTS (SELECT 1 FROM manual_version_history WHERE pdf_url = $1 OR video_url = $1) AS used`,
+    [value]
+  );
+  return rows[0].used;
 }
 
 export async function deleteManual(id) {
