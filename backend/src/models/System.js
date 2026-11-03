@@ -4,13 +4,15 @@
  */
 import { query } from '../config/db.js';
 
-// Retorna todos os sistemas; apenas a quantidade de manuais considera o setor atual.
+// Retorna todos os sistemas; apenas a quantidade de manuais considera os setores do usuário.
 export async function listSystemsForUser(user) {
   const { rows } = await query(
-    `SELECT s.*, COUNT(m.id) FILTER (WHERE $1 = 'gerente' OR m.sector_id = $2)::int AS manuals_count
+    `SELECT s.*, COUNT(m.id) FILTER (WHERE $1 IN ('suporte', 'gerente', 'editor_conteudo') OR (m.active = TRUE AND EXISTS (
+       SELECT 1 FROM manual_sectors ms WHERE ms.manual_id = m.id AND ms.sector_id = ANY($2::int[])
+     )))::int AS manuals_count
      FROM systems s LEFT JOIN manuals m ON m.system_id = s.id
      GROUP BY s.id ORDER BY s.nome ASC`,
-    [user.role, user.sector_id]
+    [user.role, user.sector_ids]
   );
   return rows;
 }

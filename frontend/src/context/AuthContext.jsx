@@ -5,7 +5,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const AuthContext = createContext(null);
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// No build do piloto (npm run build:piloto) as telas são entregues pelo próprio backend: a API fica no mesmo endereço.
+export const API_URL = import.meta.env.MODE === 'piloto' ? '' : (import.meta.env.VITE_API_URL || 'http://localhost:4000');
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('token'));

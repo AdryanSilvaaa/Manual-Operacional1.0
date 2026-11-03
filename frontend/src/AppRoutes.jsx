@@ -2,23 +2,36 @@
  * Mapa central de URLs, layouts e perfis autorizados do frontend.
  * Alterar path muda o endereço da tela; alterar roles muda quem consegue abri-la.
  */
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AppLayout from './components/AppLayout.jsx';
 import Login from './components/Login.jsx';
-import ManualViewer from './components/ManualViewer.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
-import { ADMIN_ROLES, FULL_ADMIN_ROLES } from './constants/roles.js';
-import Admin from './pages/Admin.jsx';
-import CadastroSistemas from './pages/CadastroSistemas.jsx';
-import CriarManual from './pages/CriarManual.jsx';
+import { ADMIN_ROLES, FULL_ADMIN_ROLES, ROLES } from './constants/roles.js';
 import Home from './pages/Home.jsx';
-import Manuais from './pages/Manuais.jsx';
-import Setores from './pages/Setores.jsx';
-import Sistemas from './pages/Sistemas.jsx';
-import Usuarios from './pages/Usuarios.jsx';
+
+// Cada tela vira um arquivo separado, baixado só quando aberta. O leitor de PDF (pdf.js) e as telas
+// administrativas deixam de pesar no primeiro carregamento de quem só faz login e lê manuais.
+const ManualViewer = lazy(() => import('./components/ManualViewer.jsx'));
+const Admin = lazy(() => import('./pages/Admin.jsx'));
+const CadastroSistemas = lazy(() => import('./pages/CadastroSistemas.jsx'));
+const CriarManual = lazy(() => import('./pages/CriarManual.jsx'));
+const GerenciarManuais = lazy(() => import('./pages/GerenciarManuais.jsx'));
+const CriarProva = lazy(() => import('./pages/CriarProva.jsx'));
+const Manuais = lazy(() => import('./pages/Manuais.jsx'));
+const Setores = lazy(() => import('./pages/Setores.jsx'));
+const Sistemas = lazy(() => import('./pages/Sistemas.jsx'));
+const Usuarios = lazy(() => import('./pages/Usuarios.jsx'));
+const PainelUso = lazy(() => import('./pages/PainelUso.jsx'));
+const AlterarSenha = lazy(() => import('./pages/AlterarSenha.jsx'));
+const Provas = lazy(() => import('./pages/Provas.jsx'));
+const RealizarProva = lazy(() => import('./pages/RealizarProva.jsx'));
+const Aparencia = lazy(() => import('./pages/Aparencia.jsx'));
 
 function PrivatePage({ children, roles }) {
-  return <ProtectedRoute roles={roles}>{children}</ProtectedRoute>;
+  return <ProtectedRoute roles={roles}>
+    <Suspense fallback={<p className="empty-state">Carregando...</p>}>{children}</Suspense>
+  </ProtectedRoute>;
 }
 
 export default function AppRoutes() {
@@ -34,7 +47,14 @@ export default function AppRoutes() {
         <Route path="configuracoes/usuarios" element={<PrivatePage roles={FULL_ADMIN_ROLES}><Usuarios /></PrivatePage>} />
         <Route path="configuracoes/sistemas" element={<PrivatePage roles={FULL_ADMIN_ROLES}><CadastroSistemas /></PrivatePage>} />
         <Route path="configuracoes/setores" element={<PrivatePage roles={FULL_ADMIN_ROLES}><Setores /></PrivatePage>} />
+        <Route path="configuracoes/aparencia" element={<PrivatePage roles={FULL_ADMIN_ROLES}><Aparencia /></PrivatePage>} />
         <Route path="configuracoes/manuais" element={<PrivatePage roles={ADMIN_ROLES}><CriarManual /></PrivatePage>} />
+        <Route path="configuracoes/gerenciar-manuais" element={<PrivatePage roles={ADMIN_ROLES}><GerenciarManuais /></PrivatePage>} />
+        <Route path="configuracoes/provas" element={<PrivatePage roles={ADMIN_ROLES}><CriarProva /></PrivatePage>} />
+        <Route path="provas" element={<PrivatePage roles={[ROLES.USER]}><Provas /></PrivatePage>} />
+        <Route path="provas/:id" element={<PrivatePage roles={[ROLES.USER]}><RealizarProva /></PrivatePage>} />
+        <Route path="configuracoes/painel-uso" element={<PrivatePage roles={ADMIN_ROLES}><PainelUso /></PrivatePage>} />
+        <Route path="alterar-senha" element={<PrivatePage><AlterarSenha /></PrivatePage>} />
         <Route path="admin" element={<Navigate to="/configuracoes" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

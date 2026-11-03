@@ -27,8 +27,8 @@
   height: 100vh;
   padding: 26px 12px;
   overflow: hidden;
-  color: #fff;
-  background: linear-gradient(180deg, var(--color-navy), var(--color-navy-deep));
+  color: var(--sidebar-text-hover);
+  background: linear-gradient(180deg, var(--sidebar-bg-start), var(--sidebar-bg-end));
   flex-direction: column;
   align-items: center;
   transition: width var(--transition-normal), padding var(--transition-normal);
@@ -71,7 +71,7 @@
 .sidebar-nav a {
   display: flex;
   padding: 13px 0;
-  color: #d9ddff;
+  color: var(--sidebar-text);
   border-radius: 10px;
   font-size: 13px;
   font-weight: 700;
@@ -108,8 +108,8 @@
 /* Destaque visual do item apontado ou acessado pelo teclado. */
 .sidebar-nav a:hover,
 .sidebar-nav a:focus-visible {
-  color: #fff;
-  background: rgb(255 255 255 / 13%);
+  color: var(--sidebar-text-hover);
+  background: var(--sidebar-hover-bg);
   transform: translateX(3px);
 }
 

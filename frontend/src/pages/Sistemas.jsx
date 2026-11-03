@@ -1,6 +1,7 @@
 /** Lista os sistemas disponíveis; cards mudam em CardSistema.jsx e a API no backend. */
 import { useEffect, useMemo, useState } from 'react';
 import CardSistema from '../components/CardSistema.jsx';
+import BackButton from '../components/BackButton.jsx';
 import SearchField from '../components/SearchField.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { matchesSearch } from '../utils/search.js';
@@ -32,6 +33,7 @@ export default function Sistemas() {
 
   return (
     <section className="page-section">
+      <BackButton fallback="/" />
       <div className="page-heading">
         <p className="eyebrow">Sistemas</p>
         <h1>Escolha um sistema</h1>

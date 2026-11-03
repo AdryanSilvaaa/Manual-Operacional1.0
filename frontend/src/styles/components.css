@@ -75,11 +75,11 @@
   display: inline-flex;
   min-height: 46px;
   padding: 11px 18px;
-  color: #fff;
+  color: var(--color-on-primary);
   background: var(--color-primary);
   border: 0;
   border-radius: 10px;
-  box-shadow: 0 6px 14px rgb(204 51 153 / 22%);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--color-primary) 22%, transparent);
   font-size: 13px;
   font-weight: 800;
   align-items: center;
@@ -90,7 +90,7 @@
 
 .primary-button:hover {
   background: var(--color-primary-hover);
-  box-shadow: 0 9px 18px rgb(204 51 153 / 30%);
+  box-shadow: 0 9px 18px color-mix(in srgb, var(--color-primary) 30%, transparent);
   transform: translateY(-2px);
 }
 
@@ -122,7 +122,12 @@
 
 .search-field:focus-within {
   border-color: var(--color-sky);
-  box-shadow: 0 0 0 3px rgb(82 178 221 / 16%);
+  box-shadow: none;
+}
+
+/* O contêiner já indica o foco; evita um segundo halo no input interno. */
+.search-field input:focus {
+  box-shadow: none;
 }
 
 .search-field input {
@@ -199,6 +204,126 @@
   border: 1px dashed var(--color-sky);
 }
 
+/* POP-UPS (TOASTS) -------------------------------------------------------- */
+/* Mensagens de sucesso, erro e aviso que aparecem no canto da tela (context/ToastContext.jsx). */
+.toast-viewport {
+  position: fixed;
+  top: calc(var(--topbar-height) + 12px);
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 16px 16px;
+  overflow: hidden;
+  color: var(--toast-text);
+  background: #ffffff;
+  border: 1px solid #e6e6e6;
+  border-left: 5px solid var(--toast-accent);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 16%);
+  pointer-events: auto;
+  animation: toast-in 220ms ease-out;
+}
+
+.toast-success { --toast-accent: var(--toast-success); }
+.toast-error { --toast-accent: var(--toast-error); }
+.toast-info { --toast-accent: var(--toast-info); }
+
+.toast-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--toast-accent);
+}
+
+.toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-body strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.toast-body p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #333333;
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: #555555;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  color: #000000;
+  background: #f0f0f0;
+}
+
+/* Barra que mostra o tempo restante; para enquanto o mouse está sobre o pop-up. */
+.toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--toast-accent);
+  transform-origin: left;
+  animation: toast-timer linear forwards;
+}
+
+.toast:hover .toast-progress {
+  animation-play-state: paused;
+}
+
+.toast-leaving {
+  animation: toast-out 200ms ease-in forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-out {
+  to { opacity: 0; transform: translateX(24px); }
+}
+
+@keyframes toast-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast-leaving { animation: none; }
+  .toast-progress { display: none; }
+}
+
 /* TEXTOS E LINKS AUXILIARES ---------------------------------------------- */
 /* Pequeno texto em caixa alta exibido acima dos títulos de página. */
 .eyebrow {
@@ -219,4 +344,10 @@
   font-weight: 800;
   align-items: center;
   gap: 8px;
+}
+
+.back-button {
+  padding: 0;
+  background: transparent;
+  border: 0;
 }

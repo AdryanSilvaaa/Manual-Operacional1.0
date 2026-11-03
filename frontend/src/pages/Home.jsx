@@ -1,17 +1,16 @@
-/** Página pública inicial; altere textos e benefícios aqui e o layout em styles/pages.css. */
+/** Página pública inicial; nome e textos da marca vêm de constants/brand.js e o layout de styles/pages.css. */
 import { ArrowRight, ClipboardCheck, FileVideo, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { PRODUCT_DESCRIPTION, PRODUCT_NAME, PRODUCT_SLOGAN, PRODUCT_TAGLINE } from '../constants/brand.js';
 
 export default function Home() {
   return (
     <section className="home">
       <div className="home-content">
-        <p className="eyebrow">Base operacional centralizada</p>
-        <h1>Manual Operacional Digital</h1>
-        <p>
-          Acesse tutoriais, PDFs e videos de rotinas internas em um ambiente
-          controlado por permissao de usuario.
-        </p>
+        <p className="eyebrow">{PRODUCT_TAGLINE}</p>
+        <h1>{PRODUCT_NAME}</h1>
+        <p className="home-slogan">{PRODUCT_SLOGAN}</p>
+        <p>{PRODUCT_DESCRIPTION}</p>
         <Link to="/sistemas" className="primary-button">
           Ver Sistemas
           <ArrowRight size={18} />
@@ -25,7 +24,7 @@ export default function Home() {
         </div>
         <div>
           <FileVideo size={24} />
-          <span>PDF e video em um unico lugar</span>
+          <span>PDF e vídeo em um único lugar</span>
         </div>
         <div>
           <LockKeyhole size={24} />

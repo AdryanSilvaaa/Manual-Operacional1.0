@@ -1,14 +1,31 @@
-# Manual Operacional Digital
+# Prumo
+
+**Quem segue o prumo, não erra o caminho.** Manuais e treinamentos operacionais em PDF e vídeo, com acesso por perfil e acompanhamento do aprendizado. Produto white label: nome e slogan em `frontend/src/constants/brand.js`, logo do cliente em `frontend/src/components/BrandLogo.jsx`.
 
 Sistema web com React.js no frontend, Node.js + Express no backend e PostgreSQL.
+
+## Documentação
+
+Toda a documentação está em [`docs/`](docs/Indice-da-Documentacao.pdf), organizada em:
+
+- [Geral](docs/Geral/Visao-Geral.pdf): visão do produto, regras de negócio, instalação e implantação no Google Cloud.
+- [Front-end](docs/Front-end/Front-end.pdf): telas, rotas, perfis e componentes.
+- [Back-end](docs/Back-end/Back-end.pdf): arquitetura da API e [referência dos endpoints](docs/Back-end/API/Referencia-da-API.pdf) com [OpenAPI](docs/Back-end/API/openapi.yaml).
+- [Banco de Dados](docs/Banco%20de%20Dados/Banco-de-Dados.pdf): tabelas, relacionamentos, exclusões e versionamento.
 
 ## Recursos
 
 - Login com JWT por identificador textual (não exige e-mail).
-- Perfil gerente e usuario comum.
-- Gerente cadastra sistemas, usuarios e manuais com upload de PDF e video.
-- Gerente vincula cada manual a um sistema.
+- Perfis: suporte (administração geral), gerente de setor e usuário comum (operador).
+- Suporte cadastra sistemas, setores, usuários e manuais; gerente de setor publica manuais no próprio setor.
+- Cada manual (PDF + vídeo) é vinculado a um sistema e a um setor.
 - Usuários pertencem a setores e visualizam apenas os manuais do seu setor.
+- Painel gerencial com conclusão por manual e detalhamento por operador.
+- Progresso de vídeo registrado pelo tempo efetivamente assistido e confirmação de leitura do PDF.
+- Leitor PDF paginado com retomada, páginas visitadas e conclusão real do documento.
+- Provas por setor (múltipla escolha e resposta aberta) com aviso ao colaborador e aba Resultados de Provas no painel.
+- Versões arquivadas e exportação CSV do painel.
+- Troca de senha, bloqueio de tentativas de login e trilha de auditoria.
 - URLs dos arquivos sao salvas no banco; arquivos ficam no Supabase Storage ou, em desenvolvimento, na pasta `backend/uploads`.
 
 ## Como rodar
@@ -18,11 +35,10 @@ Sistema web com React.js no frontend, Node.js + Express no backend e PostgreSQL.
 Crie o banco PostgreSQL e execute:
 
 ```bash
-psql "$DATABASE_URL" -f backend/sql/schema.sql
-psql "$DATABASE_URL" -f backend/sql/seed-admin.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/sql/schema.sql
 ```
 
-Se o banco ja existia antes da tela de sistemas, rode o `schema.sql` novamente para criar a tabela `systems` e adicionar `system_id` em `manuals`.
+O `schema.sql` contém toda a estrutura, índices, migrações e o usuário inicial (não há arquivo de seed separado). Ele é transacional e pode ser executado novamente para atualizar uma instalação existente.
 
 Usuario inicial:
 
@@ -80,6 +96,10 @@ backend/
   src/routes
   sql/
 ```
+
+## Implantação no Google Cloud
+
+O plano de hospedagem (bucket privado, Cloud CDN e Cloud Run) está em [`docs/Geral/Implantacao-Google-Cloud.pdf`](docs/Geral/Implantacao-Google-Cloud.pdf).
 
 `app.js` configura a API sem iniciar a porta, enquanto `server.js` fica responsável apenas pela inicialização do processo. No frontend, `AppRoutes.jsx` concentra as rotas e `ProtectedRoute.jsx` aplica autenticação e permissões.
 

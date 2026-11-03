@@ -1,8 +1,9 @@
 /** Painel de atalhos administrativos; links e perfis visíveis são definidos nesta tela. */
-import { BookOpenCheck, Boxes, Building2, UsersRound } from 'lucide-react';
+import { BarChart3, BookOpenCheck, Boxes, Building2, ClipboardCheck, FilePenLine, Palette, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { FULL_ADMIN_ROLES } from '../constants/roles.js';
+import BackButton from '../components/BackButton.jsx';
 
 // Exibe somente as configuracoes que o perfil atual pode administrar.
 export default function Admin() {
@@ -12,9 +13,13 @@ export default function Admin() {
     ...(isSupport ? [
       { to: '/configuracoes/usuarios', icon: UsersRound, title: 'Criar / Alterar Usuários', text: 'Cadastre usuários, perfis e setores.' },
       { to: '/configuracoes/setores', icon: Building2, title: 'Cadastrar Setor', text: 'Mantenha os setores disponíveis para a operação.' },
-      { to: '/configuracoes/sistemas', icon: Boxes, title: 'Cadastrar Sistemas', text: 'Gerencie os sistemas disponíveis para todos os setores.' }
+      { to: '/configuracoes/sistemas', icon: Boxes, title: 'Cadastrar Sistemas', text: 'Gerencie os sistemas disponíveis para todos os setores.' },
+      { to: '/configuracoes/aparencia', icon: Palette, title: 'Aparência', text: 'Troque as cores e as logos da plataforma.' }
     ] : []),
-    { to: '/configuracoes/manuais', icon: BookOpenCheck, title: 'Criar Manual', text: 'Envie materiais e vincule-os a um setor.' }
+    { to: '/configuracoes/manuais', icon: BookOpenCheck, title: 'Criar Manual', text: 'Envie materiais e vincule-os a um setor.' },
+    { to: '/configuracoes/gerenciar-manuais', icon: FilePenLine, title: 'Gerenciar Manuais', text: 'Edite, desative ou exclua manuais já publicados.' },
+    { to: '/configuracoes/provas', icon: ClipboardCheck, title: 'Criar Prova', text: 'Monte provas de até 10 perguntas para os seus setores.' },
+    { to: '/configuracoes/painel-uso', icon: BarChart3, title: 'Painel de Uso', text: 'Acompanhe leituras, conclusões e resultados de provas.' }
   ];
-  return <section className="page-section"><div className="page-heading"><p className="eyebrow">Perfil</p><h1>Configurações</h1></div><div className="manual-grid">{items.map(({ to, icon: Icon, title, text }) => <Link key={to} to={to} className="manual-card"><div className="manual-logo"><Icon size={28} /></div><div><h2>{title}</h2><p>{text}</p></div></Link>)}</div></section>;
+  return <section className="page-section"><BackButton fallback="/sistemas" /><div className="page-heading"><p className="eyebrow">Perfil</p><h1>Configurações</h1></div><div className="manual-grid">{items.map(({ to, icon: Icon, title, text }) => <Link key={to} to={to} className="manual-card"><div className="manual-logo"><Icon size={28} /></div><div><h2>{title}</h2><p>{text}</p></div></Link>)}</div></section>;
 }

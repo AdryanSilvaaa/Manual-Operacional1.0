@@ -5,14 +5,16 @@
 import { useEffect, useState } from 'react';
 import { Building2, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
+import BackButton from '../components/BackButton.jsx';
 
 /** Permite ao suporte manter a lista de setores corporativos. */
 export default function Setores() {
   const { apiUrl, token } = useAuth();
   const [setores, setSetores] = useState([]);
   const [nome, setNome] = useState('');
-  const [message, setMessage] = useState('');
+  const toast = useToast();
 
   // Consulta os setores para a tabela e para os demais cadastros.
   async function loadSectors() {
@@ -23,13 +25,12 @@ export default function Setores() {
   }
 
   useEffect(() => {
-    loadSectors().catch((error) => setMessage(error.message));
-  }, [apiUrl, token]);
+    loadSectors().catch((error) => toast.error(error.message));
+  }, [apiUrl, token, toast]);
 
   // Cria um setor reutilizável em usuários e manuais.
   async function handleSubmit(event) {
     event.preventDefault();
-    setMessage('');
 
     try {
       const response = await fetch(`${apiUrl}/api/sectors`, {
@@ -39,17 +40,17 @@ export default function Setores() {
       });
       const sector = await readResponse(response);
       setNome('');
-      setMessage(`Setor ${sector.nome} cadastrado com sucesso.`);
+      toast.success(`Setor ${sector.nome} cadastrado com sucesso.`);
       await loadSectors();
     } catch (error) {
-      setMessage(error.message);
+      toast.error(error.message);
     }
   }
 
   return (
     <section className="admin-page">
+      <BackButton fallback="/configuracoes" />
       <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Cadastrar Setor</h1></div>
-      {message && <p className="notice">{message}</p>}
       <div className="admin-grid">
         <form className="admin-panel" onSubmit={handleSubmit}>
           <h2>Novo setor</h2>

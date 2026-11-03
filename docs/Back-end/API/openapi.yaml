@@ -1,0 +1,1006 @@
+openapi: 3.0.3
+info:
+  title: Prumo API
+  version: 1.0.0
+  description: API de publicação, treinamento e acompanhamento de manuais operacionais.
+servers:
+  - url: http://localhost:4000
+    description: Ambiente local
+tags:
+  - name: Health
+  - name: Auth
+  - name: Users
+  - name: Systems
+  - name: Sectors
+  - name: Manuals
+  - name: Progress
+  - name: Exams
+  - name: Uploads
+  - name: Branding
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Verifica a disponibilidade do processo HTTP
+      responses:
+        '200':
+          description: Serviço ativo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: Prumo API }
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Verifica se o processo e o PostgreSQL estão disponíveis
+      responses:
+        '200':
+          description: Pronto para receber tráfego
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  database: { type: string, example: ok }
+        '503':
+          description: Banco de dados indisponível
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: unavailable }
+                  database: { type: string, example: indisponivel }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Autentica um usuário
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login bem-sucedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { description: Muitas tentativas }
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Retorna o usuário autenticado
+      responses:
+        '200':
+          description: Usuário atual
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/auth/password:
+    put:
+      tags: [Auth]
+      summary: Altera a própria senha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, format: password }
+                newPassword: { type: string, format: password, minLength: 8 }
+      responses:
+        '204': { description: Senha alterada }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/auth/register:
+    post:
+      tags: [Auth, Users]
+      summary: Cria um usuário (suporte)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserRequest' }
+      responses:
+        '201':
+          description: Usuário criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/users:
+    get:
+      tags: [Users]
+      summary: Lista usuários (suporte)
+      responses:
+        '200':
+          description: Lista de usuários
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/users/import:
+    post:
+      tags: [Users]
+      summary: Importa usuários em massa a partir de planilha (suporte)
+      description: Com dryRun só confere as linhas. Sem dryRun grava as linhas válidas numa transação e devolve as senhas provisórias geradas (única vez que aparecem).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                dryRun: { type: boolean }
+                rows:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    properties:
+                      linha: { type: integer, description: Número da linha na planilha }
+                      nome: { type: string }
+                      login: { type: string }
+                      perfil: { type: string, description: 'Usuário comum, Gerente de setor ou Suporte; vazio = usuario' }
+                      setores: { type: string, description: Nomes de setores existentes separados por vírgula }
+                      senha: { type: string, description: Opcional; vazia gera senha provisória }
+      responses:
+        '200': { description: Conferência (dryRun) com total, validos e a situação de cada linha }
+        '201': { description: Usuários criados; traz criados, rows e acessos (nome, login, perfil, setores, senha provisória ou null) }
+        '400': { description: Sem linhas ou mais de 500 }
+        '409': { description: Login cadastrado durante a importação; nada foi gravado }
+  /api/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [Users]
+      summary: Atualiza usuário (suporte)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserRequest' }
+      responses:
+        '200':
+          description: Usuário atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+    delete:
+      tags: [Users]
+      summary: Exclui usuário (suporte)
+      responses:
+        '204': { description: Usuário excluído }
+        '400': { description: Tentativa de excluir a própria conta }
+  /api/systems:
+    get:
+      tags: [Systems]
+      summary: Lista sistemas visíveis
+      responses:
+        '200':
+          description: Sistemas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/System' }
+    post:
+      tags: [Systems]
+      summary: Cria sistema (suporte)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SystemInput' }
+      responses:
+        '201':
+          description: Sistema criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/System' }
+  /api/systems/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [Systems]
+      summary: Atualiza sistema (suporte)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SystemInput' }
+      responses:
+        '200':
+          description: Sistema atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/System' }
+        '400': { description: Nome vazio }
+        '404': { description: Sistema não encontrado }
+    delete:
+      tags: [Systems]
+      summary: Exclui sistema (suporte)
+      responses:
+        '204': { description: Sistema excluído }
+        '409': { description: Existem manuais vinculados ao sistema; exclusão bloqueada }
+  /api/sectors:
+    get:
+      tags: [Sectors]
+      summary: Lista setores (gerência)
+      responses:
+        '200':
+          description: Setores
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Sector' }
+    post:
+      tags: [Sectors]
+      summary: Cria ou reutiliza setor (suporte)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome: { type: string }
+      responses:
+        '201':
+          description: Setor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sector' }
+  /api/manuals:
+    get:
+      tags: [Manuals]
+      summary: Lista manuais visíveis
+      parameters:
+        - in: query
+          name: systemId
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Manuais
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Manual' }
+    post:
+      tags: [Manuals]
+      summary: Cria manual (gerência)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/ManualForm' }
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualKeysForm' }
+      responses:
+        '201':
+          description: Manual criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Manual' }
+        '400':
+          description: Campo obrigatório ausente ou tipo de arquivo não permitido
+        '413':
+          description: Arquivo acima do limite (PDF 20 MB, vídeo 200 MB por padrão)
+  /api/manuals/manage:
+    get:
+      tags: [Manuals]
+      summary: Lista da tela Gerenciar Manuais (gerência)
+      description: Ativos e inativos, em ordem alfabética. Suporte e editor de conteúdo recebem todos; gerente de setor, só os manuais cujos setores são todos seus.
+      responses:
+        '200':
+          description: Manuais que o perfil pode alterar
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ManageableManual' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/manuals/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Manuals]
+      summary: Obtém manual visível
+      responses:
+        '200':
+          description: Manual
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Manual' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Manuals]
+      summary: Atualiza manual (gerência)
+      description: Suporte e editor de conteúdo alteram qualquer manual; gerente de setor, só manual cujos setores são todos seus. Grava auditoria manual_updated.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/ManualUpdateForm' }
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualUpdateForm' }
+      responses:
+        '200':
+          description: Manual atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Manual' }
+        '400':
+          description: Setor inexistente ou fora dos setores do gerente
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Manuals]
+      summary: Exclui manual (gerência)
+      description: Mesma regra de acesso do PUT. Apaga em cascata setores, progresso e históricos; os arquivos ficam no armazenamento. Grava auditoria manual_deleted.
+      responses:
+        '204': { description: Manual excluído }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/uploads/config:
+    get:
+      tags: [Uploads]
+      summary: Informa se o upload é direto ao bucket e os limites (gerência)
+      responses:
+        '200':
+          description: Configuração de upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  directUpload: { type: boolean }
+                  driver: { type: string, enum: [s3, supabase, local] }
+                  limits:
+                    type: object
+                    properties:
+                      pdfMb: { type: integer, example: 20 }
+                      videoMb: { type: integer, example: 200 }
+  /api/uploads/presign:
+    post:
+      tags: [Uploads]
+      summary: Gera URL assinada para enviar PDF ou vídeo direto ao bucket (gerência)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, contentType, size]
+              properties:
+                kind: { type: string, enum: [pdf, video] }
+                contentType: { type: string, enum: [application/pdf, video/mp4, video/webm, video/quicktime] }
+                size: { type: integer, description: Tamanho em bytes }
+      responses:
+        '200':
+          description: URL de envio
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+                  method: { type: string, example: PUT }
+                  url: { type: string }
+                  headers: { type: object, additionalProperties: { type: string } }
+                  expiresIn: { type: integer, example: 600 }
+        '400':
+          description: Tipo não permitido ou upload direto não configurado
+        '413':
+          description: Arquivo acima do limite
+  /api/progress/report:
+    get:
+      tags: [Progress]
+      summary: Relatório gerencial de progresso
+      description: >-
+        Uma linha por pessoa de qualquer perfil e manual: os manuais dos setores dela, inclusive não iniciados,
+        mais os que ela abriu fora deles. Gerente de setor recebe só quem é dos próprios setores.
+      responses:
+        '200':
+          description: Linhas do relatório
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReportRow' }
+  /api/progress/{manualId}:
+    parameters:
+      - $ref: '#/components/parameters/ManualId'
+    get:
+      tags: [Progress]
+      summary: Obtém o próprio progresso
+      responses:
+        '200':
+          description: Progresso
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Progress' }
+    put:
+      tags: [Progress]
+      summary: Atualiza incrementalmente o próprio progresso
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProgressUpdate' }
+      responses:
+        '200':
+          description: Progresso atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Progress' }
+  /api/exams:
+    post:
+      tags: [Exams]
+      summary: Cria prova
+      description: Gerente de setor (um dos seus setores, via sectorId; opcional se tiver só um), editor de conteúdo ou suporte (um setor ou todos). De 1 a 10 perguntas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamInput' }
+      responses:
+        '201':
+          description: Prova criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Exam' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/exams/available:
+    get:
+      tags: [Exams]
+      summary: Provas abertas agora e ainda não entregues pelo colaborador
+      description: Devolve lista vazia para perfis diferentes de usuario.
+      responses:
+        '200':
+          description: Provas disponíveis
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Exam' }
+  /api/exams/results:
+    get:
+      tags: [Exams]
+      summary: Resultados das provas (gerente do setor, editor de conteúdo ou suporte)
+      responses:
+        '200':
+          description: Provas com perguntas, entregas e respostas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ExamResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/exams/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Exams]
+      summary: Dados da tela de início da prova (sem as perguntas)
+      description: Se a prova tinha ficado em andamento (a pessoa saiu da página), ela é encerrada e a resposta é 409.
+      responses:
+        '200':
+          description: Prova e quantidade de perguntas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Exam'
+                  - type: object
+                    properties:
+                      question_count: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Fora do período, já entregue ou encerrada ao sair da página
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/exams/{id}/start:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Exams]
+      summary: Inicia a prova (uma vez) e devolve as perguntas sem as respostas corretas
+      responses:
+        '201':
+          description: Prova em andamento
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Exam'
+                  - type: object
+                    properties:
+                      questions:
+                        type: array
+                        items: { $ref: '#/components/schemas/ExamQuestion' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Fora do período, já iniciada, entregue ou encerrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/exams/{id}/leave:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Exams]
+      summary: Encerra a prova em andamento porque o colaborador saiu da página
+      description: Grava as respostas recebidas; perguntas sem resposta contam como erradas. A tela chama com fetch keepalive.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                answers:
+                  type: object
+                  additionalProperties:
+                    oneOf:
+                      - { type: integer, minimum: 0, maximum: 3 }
+                      - { type: string }
+      responses:
+        '204': { description: Prova encerrada }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Prova não iniciada ou já finalizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/exams/{id}/submissions:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Exams]
+      summary: Entrega a prova em andamento (uma vez por colaborador)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: object
+                  description: Chave = id da pergunta; valor = índice 0 a 3 (múltipla escolha) ou texto (aberta)
+                  additionalProperties:
+                    oneOf:
+                      - { type: integer, minimum: 0, maximum: 3 }
+                      - { type: string }
+      responses:
+        '201':
+          description: Entrega registrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  objectiveTotal: { type: integer }
+                  objectiveCorrect: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Fora do período, não iniciada, já entregue ou encerrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/branding:
+    get:
+      tags: [Branding]
+      summary: Aparência white label (cores e logos); público, usado também no login
+      security: []
+      responses:
+        '200':
+          description: Configuração salva; sem configuração, colors vem vazio e as telas usam o padrão
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Branding' }
+    put:
+      tags: [Branding]
+      summary: Substitui cores e logos (suporte); o que não for enviado volta ao padrão
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandingInput' }
+      responses:
+        '200':
+          description: Configuração salva
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Branding' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema: { type: integer }
+    ManualId:
+      in: path
+      name: manualId
+      required: true
+      schema: { type: integer }
+  responses:
+    BadRequest:
+      description: Dados inválidos
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Token ausente, inválido ou expirado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Perfil sem permissão
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+    Role:
+      type: string
+      enum: [usuario, gerente_setor, editor_conteudo, suporte]
+    LoginRequest:
+      type: object
+      required: [identificador, senha]
+      properties:
+        identificador: { type: string }
+        senha: { type: string, format: password }
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        user: { $ref: '#/components/schemas/User' }
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        nome: { type: string }
+        identificador: { type: string }
+        email: { type: string, nullable: true }
+        role: { $ref: '#/components/schemas/Role' }
+        sector_ids: { type: array, items: { type: integer } }
+        setores:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              nome: { type: string }
+        created_at: { type: string, format: date-time }
+    CreateUserRequest:
+      type: object
+      required: [nome, identificador, senha, role]
+      properties:
+        nome: { type: string }
+        identificador: { type: string }
+        senha: { type: string, format: password, minLength: 8 }
+        role: { $ref: '#/components/schemas/Role' }
+        sectorIds:
+          type: array
+          items: { type: integer }
+          description: Obrigatório (um ou mais) para usuario e gerente_setor; opcional para editor_conteudo e suporte.
+    UpdateUserRequest:
+      type: object
+      required: [nome, identificador, role]
+      properties:
+        nome: { type: string }
+        identificador: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        sectorIds:
+          type: array
+          items: { type: integer }
+          description: Obrigatório (um ou mais) para usuario e gerente_setor; opcional para editor_conteudo e suporte.
+        senha:
+          type: string
+          description: Opcional. Redefine a senha (8+ caracteres, uma letra e um número). Vazia ou ausente mantém a atual.
+    System:
+      type: object
+      properties:
+        id: { type: integer }
+        nome: { type: string }
+        resumo: { type: string, nullable: true }
+        manuals_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SystemInput:
+      type: object
+      properties:
+        nome: { type: string }
+        resumo: { type: string }
+    Sector:
+      type: object
+      properties:
+        id: { type: integer }
+        nome: { type: string }
+        created_at: { type: string, format: date-time }
+    Manual:
+      type: object
+      properties:
+        id: { type: integer }
+        titulo: { type: string }
+        descricao: { type: string, nullable: true }
+        pdf_url: { type: string, nullable: true, description: Nulo quando o manual tem só vídeo }
+        video_url: { type: string, nullable: true, description: Nulo quando o manual tem só PDF }
+        system_id: { type: integer, nullable: true }
+        sector_id: { type: integer, description: Primeiro setor escolhido }
+        sector_ids:
+          type: array
+          items: { type: integer }
+          description: Todos os setores do manual
+        sector_names:
+          type: array
+          items: { type: string }
+        criado_por: { type: integer, nullable: true }
+        version: { type: integer }
+        active: { type: boolean }
+        progress_percent: { type: integer, minimum: 0, maximum: 100 }
+    ManageableManual:
+      type: object
+      properties:
+        id: { type: integer }
+        titulo: { type: string }
+        descricao: { type: string, nullable: true }
+        system_id: { type: integer, nullable: true }
+        system_name: { type: string, nullable: true }
+        active: { type: boolean }
+        version: { type: integer }
+        has_pdf: { type: boolean }
+        has_video: { type: boolean }
+        criado_por_nome: { type: string, nullable: true }
+        sector_ids:
+          type: array
+          items: { type: integer }
+        sector_names:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ManualForm:
+      type: object
+      description: Pelo menos um dos arquivos, pdf ou video, é obrigatório.
+      required: [titulo, systemId, sectorIds]
+      properties:
+        titulo: { type: string }
+        descricao: { type: string }
+        systemId: { type: integer }
+        sectorIds:
+          type: array
+          items: { type: integer }
+          description: Um ou mais setores já cadastrados; o manual aparece para quem é de qualquer um deles. No multipart, repita o campo
+        setor: { type: string, description: Formato antigo (nome de um único setor), usado só quando sectorIds não vem }
+        pdf: { type: string, format: binary }
+        video: { type: string, format: binary }
+    ManualKeysForm:
+      type: object
+      description: Cadastro depois do upload direto ao bucket (modo s3); pdfKey e videoKey vêm de /api/uploads/presign. Pelo menos uma das duas chaves é obrigatória.
+      required: [titulo, systemId]
+      properties:
+        titulo: { type: string }
+        descricao: { type: string }
+        systemId: { type: integer }
+        sectorIds:
+          type: array
+          items: { type: integer }
+          description: Um ou mais setores já cadastrados; o manual aparece para quem é de qualquer um deles. No multipart, repita o campo
+        setor: { type: string, description: Formato antigo (nome de um único setor), usado só quando sectorIds não vem }
+        pdfKey: { type: string, example: pdfs/2f6c1d0e-8a1b-4c5d-9e7f-0a1b2c3d4e5f.pdf }
+        videoKey: { type: string, example: videos/2f6c1d0e-8a1b-4c5d-9e7f-0a1b2c3d4e5f.mp4 }
+    ManualUpdateForm:
+      type: object
+      properties:
+        titulo: { type: string }
+        descricao: { type: string }
+        systemId: { type: integer }
+        sectorIds:
+          type: array
+          items: { type: integer }
+          description: Substitui a lista de setores; o manual aparece para quem é de qualquer um deles. No multipart, repita o campo
+        setor: { type: string, description: Formato antigo (nome de um único setor), usado só quando sectorIds não vem }
+        active: { type: boolean }
+        pdf: { type: string, format: binary }
+        video: { type: string, format: binary }
+    Progress:
+      type: object
+      properties:
+        user_id: { type: integer }
+        manual_id: { type: integer }
+        pdf_completed: { type: boolean }
+        video_progress: { type: number }
+        total_seconds: { type: integer }
+        page_count: { type: integer }
+        last_page: { type: integer }
+        pages_viewed:
+          type: array
+          items: { type: integer }
+        first_access_at: { type: string, format: date-time }
+        last_access_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time, nullable: true }
+    ProgressUpdate:
+      type: object
+      properties:
+        page: { type: integer, minimum: 1 }
+        pageCount: { type: integer, minimum: 1 }
+        videoProgress: { type: number, minimum: 0, maximum: 100 }
+        seconds: { type: integer, minimum: 0, maximum: 60 }
+    ReportRow:
+      allOf:
+        - $ref: '#/components/schemas/Progress'
+        - type: object
+          properties:
+            user_name: { type: string }
+            user_role: { type: string, enum: [usuario, gerente_setor, editor_conteudo, suporte, gerente] }
+            sector_names:
+              type: array
+              items: { type: string }
+              description: Setores do manual pelos quais a pessoa o recebe
+            sector_name: { type: string, description: sector_names separados por vírgula }
+            manual_title: { type: string }
+            pages_read: { type: integer }
+            version: { type: integer }
+    ExamQuestionInput:
+      type: object
+      required: [type, prompt]
+      properties:
+        type: { type: string, enum: [multipla_escolha, aberta] }
+        prompt: { type: string }
+        options:
+          type: array
+          description: Somente múltipla escolha; exatamente 4 itens (A a D)
+          minItems: 4
+          maxItems: 4
+          items: { type: string }
+        correctOption: { type: integer, minimum: 0, maximum: 3, description: Somente múltipla escolha }
+    ExamInput:
+      type: object
+      required: [titulo, startsAt, endsAt, questions]
+      properties:
+        sectorId:
+          description: Suporte - id do setor, ou "todos" (ou ausente) para todos. Gerente de setor - id de um dos seus setores.
+          oneOf:
+            - { type: integer }
+            - { type: string, enum: [todos] }
+        titulo: { type: string, maxLength: 180 }
+        descricao: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        questions:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { $ref: '#/components/schemas/ExamQuestionInput' }
+    Exam:
+      type: object
+      properties:
+        id: { type: integer }
+        titulo: { type: string }
+        descricao: { type: string, nullable: true }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        question_count: { type: integer }
+    ExamQuestion:
+      type: object
+      properties:
+        id: { type: integer }
+        position: { type: integer }
+        type: { type: string, enum: [multipla_escolha, aberta] }
+        prompt: { type: string }
+        options:
+          type: array
+          nullable: true
+          items: { type: string }
+    ExamResult:
+      allOf:
+        - $ref: '#/components/schemas/Exam'
+        - type: object
+          properties:
+            sector_name: { type: string }
+            criado_por_nome: { type: string, nullable: true }
+            collaborators: { type: integer }
+            active: { type: boolean }
+            questions:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/ExamQuestion'
+                  - type: object
+                    properties:
+                      correct_option: { type: integer, nullable: true }
+            submissions:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+                  user_id: { type: integer }
+                  user_name: { type: string }
+                  objective_total: { type: integer }
+                  objective_correct: { type: integer }
+                  status:
+                    type: string
+                    enum: [em_andamento, enviada, encerrada]
+                    description: encerrada = saiu da página antes de enviar; em andamento após o fim do período volta como encerrada
+                  started_at: { type: string, format: date-time, nullable: true }
+                  submitted_at: { type: string, format: date-time, nullable: true }
+                  answers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        question_id: { type: integer }
+                        selected_option: { type: integer, nullable: true }
+                        answer_text: { type: string, nullable: true }
+    BrandingColors:
+      type: object
+      description: Cores em hexadecimal #rrggbb; chave ausente usa o padrão
+      properties:
+        sidebarStart: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Topo do degradê da sidebar }
+        sidebarEnd: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Base do degradê da sidebar }
+        sidebarText: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Texto dos menus }
+        sidebarHoverText: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Texto do menu no hover ou selecionado }
+        sidebarHoverBg: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Fundo do menu no hover ou selecionado }
+        primary: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Botões principais }
+        primaryHover: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Botões principais no hover }
+        primaryText: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Texto dos botões principais }
+        title: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Títulos }
+        accent: { type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Destaques e links }
+    BrandingInput:
+      type: object
+      properties:
+        colors: { $ref: '#/components/schemas/BrandingColors' }
+        logoLight:
+          type: string
+          nullable: true
+          description: Logo da sidebar (fundo escuro). Data URL base64 PNG, JPG, WebP ou SVG, até 512 KB
+        logoDark:
+          type: string
+          nullable: true
+          description: Logo do login e do cabeçalho (fundo claro). Mesmas regras
+    Branding:
+      allOf:
+        - $ref: '#/components/schemas/BrandingInput'
+        - type: object
+          properties:
+            updated_at: { type: string, format: date-time, nullable: true }
+security:
+  - bearerAuth: []

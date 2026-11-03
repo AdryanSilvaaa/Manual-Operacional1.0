@@ -1,8 +1,11 @@
 {
   "name": "manual-operacional-backend",
   "version": "1.0.0",
-  "description": "API do Manual Operacional Digital",
+  "description": "API do Prumo (manuais e treinamentos operacionais)",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -13,8 +16,11 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1153.0",
+    "@aws-sdk/s3-request-presigner": "^3.1153.0",
     "@supabase/supabase-js": "^2.45.4",
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
