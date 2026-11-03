@@ -225,6 +225,13 @@
   line-height: 1.05;
 }
 
+/* Descrição do manual no topo do visualizador: preta e maior para facilitar a leitura. */
+.viewer-header p:not(.eyebrow) {
+  color: #000000;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
 /* VISUALIZAÇÃO DE MANUAL ------------------------------------------------- */
 /* Altura máxima do PDF; altere 90vh ou 1100px para ampliar/reduzir o leitor. */
 .pdf-viewer {

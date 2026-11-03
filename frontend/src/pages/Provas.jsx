@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ClipboardCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import { formatDateTime } from '../constants/exam.js';
 import BackButton from '../components/BackButton.jsx';
@@ -10,17 +11,16 @@ import BackButton from '../components/BackButton.jsx';
 export default function Provas() {
   const { apiUrl, token } = useAuth();
   const [exams, setExams] = useState(null);
-  const [error, setError] = useState('');
+  const toast = useToast();
 
   useEffect(() => {
     fetch(`${apiUrl}/api/exams/available`, { headers: createAuthHeaders(token) })
-      .then(readResponse).then(setExams).catch((requestError) => setError(requestError.message));
-  }, [apiUrl, token]);
+      .then(readResponse).then(setExams).catch((requestError) => toast.error(requestError.message));
+  }, [apiUrl, token, toast]);
 
   return <section className="page-section">
     <BackButton fallback="/sistemas" />
     <div className="page-heading"><p className="eyebrow">Avaliação</p><h1>Provas</h1><p>Provas dos seus setores disponíveis para realizar agora.</p></div>
-    {error && <p className="alert">{error}</p>}
     {exams && !exams.length && <p className="empty-state">Nenhuma prova disponível no momento.</p>}
     <div className="manual-grid">
       {exams?.map((exam) => <Link key={exam.id} to={`/provas/${exam.id}`} className="manual-card">

@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Environment files
+# Environment files (segredos nunca entram no Git; só os modelos .env.example)
 .env
 .env.*
 !.env.example
@@ -13,10 +13,10 @@ frontend/dist/
 backend/uploads/
 work/
 *.log
+*.bak
 
 # Editor and operating system files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-

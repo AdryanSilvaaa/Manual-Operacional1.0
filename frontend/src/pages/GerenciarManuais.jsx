@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, EyeOff, Pencil, Save, Trash2, Undo2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { ROLES } from '../constants/roles.js';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import { matchesSearch } from '../utils/search.js';
@@ -30,7 +31,7 @@ export default function GerenciarManuais() {
   const [sectors, setSectors] = useState([]);
   const [directUpload, setDirectUpload] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [message, setMessage] = useState('');
+  const toast = useToast();
   // Manual em edição (cópia dos campos do formulário); null quando nenhum está aberto.
   const [editing, setEditing] = useState(null);
   const [sending, setSending] = useState('');
@@ -55,8 +56,8 @@ export default function GerenciarManuais() {
       setDirectUpload(Boolean((await getUploadConfig(apiUrl, token)).directUpload));
       await loadManuals();
     }
-    loadAll().catch((error) => setMessage(error.message));
-  }, [apiUrl, token]);
+    loadAll().catch((error) => toast.error(error.message));
+  }, [apiUrl, token, toast]);
 
   const filtered = useMemo(
     () => manuals.filter((manual) => matchesSearch(`${manual.titulo} ${manual.system_name || ''} ${(manual.sector_names || []).join(' ')}`, searchTerm)),
@@ -66,7 +67,6 @@ export default function GerenciarManuais() {
   useEffect(() => { if (editing) formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [editing?.id]);
 
   function startEdit(manual) {
-    setMessage('');
     setEditing({
       id: manual.id, titulo: manual.titulo, descricao: manual.descricao || '', systemId: String(manual.system_id || ''),
       sectorIds: manual.sector_ids || [], hasPdf: manual.has_pdf, hasVideo: manual.has_video, pdf: null, video: null,
@@ -79,7 +79,6 @@ export default function GerenciarManuais() {
 
   // Marca ou desmarca a remoção; marcar descarta um arquivo novo escolhido para o mesmo campo.
   function toggleRemove(kind) {
-    setMessage('');
     setEditing((current) => ({ ...current, [FILE_KINDS[kind].remove]: !current[FILE_KINDS[kind].remove], [kind]: null }));
   }
 
@@ -104,20 +103,21 @@ export default function GerenciarManuais() {
   async function chooseFile(kind, input) {
     const file = input.files[0] || null;
     const problem = await validateManualFile(kind, file);
-    if (problem) input.value = '';
-    setMessage(problem || '');
+    if (problem) {
+      input.value = '';
+      toast.error(problem);
+    }
     setEditing((current) => ({ ...current, [kind]: problem ? null : file }));
   }
 
   async function handleSave(event) {
     event.preventDefault();
     if (!editing.sectorIds.length) {
-      setMessage('Selecione pelo menos um setor.');
+      toast.error('Selecione pelo menos um setor.');
       return;
     }
     const removed = [editing.removePdf && 'o PDF', editing.removeVideo && 'o vídeo'].filter(Boolean).join(' e ');
     if (removed && !window.confirm(`Remover ${removed} do manual "${editing.titulo}"?\n\nO arquivo é apagado do armazenamento e isso não pode ser desfeito. O progresso dos colaboradores na parte que fica é mantido.`)) return;
-    setMessage('');
     setSending('Salvando...');
     try {
       const { id, titulo, descricao, systemId, sectorIds, pdf, video, removePdf, removeVideo } = editing;
@@ -128,40 +128,37 @@ export default function GerenciarManuais() {
       });
       await readResponse(await fetch(`${apiUrl}/api/manuals/${id}`, { method: 'PUT', headers, body }));
       setEditing(null);
-      setMessage('Manual atualizado com sucesso.');
+      toast.success('Manual atualizado com sucesso.');
       await loadManuals();
-    } catch (error) { setMessage(error.message); } finally { setSending(''); }
+    } catch (error) { toast.error(error.message); } finally { setSending(''); }
   }
 
   // Desativar tira o manual da lista dos colaboradores sem apagar o progresso; ativar devolve.
   async function toggleActive(manual) {
-    setMessage('');
     try {
       const response = await fetch(`${apiUrl}/api/manuals/${manual.id}`, {
         method: 'PUT', headers: createAuthHeaders(token), body: JSON.stringify({ active: !manual.active })
       });
       await readResponse(response);
-      setMessage(manual.active ? `"${manual.titulo}" desativado. O progresso dos colaboradores continua guardado.` : `"${manual.titulo}" ativado.`);
+      toast.success(manual.active ? `"${manual.titulo}" desativado. O progresso dos colaboradores continua guardado.` : `"${manual.titulo}" ativado.`);
       await loadManuals();
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { toast.error(error.message); }
   }
 
   async function handleDelete(manual) {
     const confirmed = window.confirm(`Excluir o manual "${manual.titulo}"?\n\nO progresso e o histórico de leitura dos colaboradores também serão apagados, e isso não pode ser desfeito. Para só tirar o manual do ar, use Desativar.`);
     if (!confirmed) return;
-    setMessage('');
     try {
       await readResponse(await fetch(`${apiUrl}/api/manuals/${manual.id}`, { method: 'DELETE', headers: createAuthHeaders(token) }));
       if (editing?.id === manual.id) setEditing(null);
-      setMessage(`"${manual.titulo}" excluído.`);
+      toast.success(`"${manual.titulo}" excluído.`);
       await loadManuals();
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { toast.error(error.message); }
   }
 
   return <section className="admin-page">
     <BackButton fallback="/configuracoes" />
     <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Gerenciar Manuais</h1></div>
-    {message && <p className="notice">{message}</p>}
 
     {editing && <form key={editing.id} ref={formRef} className="admin-panel manual-form" onSubmit={handleSave}>
       <h2>Editar manual</h2>

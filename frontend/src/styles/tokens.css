@@ -37,6 +37,11 @@
   --color-success: #198754;
   /* Cor dos erros e ações de exclusão. */
   --color-danger: #cf3d5b;
+  /* Pop-ups (toasts) de sucesso, erro e aviso: faixa lateral, ícone e barra de tempo. */
+  --toast-success: #09de73;
+  --toast-error: #e5484d;
+  --toast-info: #111111;
+  --toast-text: #111111;
   /* Intensidade e distância da sombra aplicada em cards e menus. */
   --shadow-card: 0 12px 30px rgb(34 42 105 / 9%);
   /* Arredondamento padrão dos cards e painéis maiores. */

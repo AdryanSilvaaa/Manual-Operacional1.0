@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3, Download, UsersRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import SearchSelect from '../components/SearchSelect.jsx';
 import BackButton from '../components/BackButton.jsx';
@@ -30,7 +31,7 @@ function formatDate(value) {
 export default function PainelUso() {
   const { apiUrl, token, user } = useAuth();
   const [rows, setRows] = useState([]);
-  const [error, setError] = useState('');
+  const toast = useToast();
   const [manualFilter, setManualFilter] = useState('');
   const [operatorFilter, setOperatorFilter] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
@@ -38,8 +39,8 @@ export default function PainelUso() {
 
   useEffect(() => {
     fetch(`${apiUrl}/api/progress/report`, { headers: createAuthHeaders(token) })
-      .then(readResponse).then(setRows).catch((requestError) => setError(requestError.message));
-  }, [apiUrl, token]);
+      .then(readResponse).then(setRows).catch((requestError) => toast.error(requestError.message));
+  }, [apiUrl, token, toast]);
 
   const manuals = useMemo(() => [...new Map(rows.map((row) => [row.manual_id, row.manual_title])).entries()], [rows]);
   // Um manual pode valer para vários setores: a linha traz em sector_names os setores pelos quais a pessoa o recebe.
@@ -77,7 +78,6 @@ export default function PainelUso() {
     <div className="page-heading"><p className="eyebrow">Acompanhamento</p><h1>Painel de uso</h1><p>Progresso de operadores, gestores e suporte nos manuais e resultados das provas.</p></div>
     <div className="tab-list" role="tablist">{TABS.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? 'tab active' : 'tab'} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
     {tab === 'provas' ? <ResultadosProvas /> : <>
-    {error && <p className="alert">{error}</p>}
     <div className="dashboard-filters">
       <div className="filter-field"><label htmlFor="manual-search">Manual</label><SearchSelect id="manual-search" value={manualFilter} onChange={setManualFilter} options={manualOptions} placeholder="Pesquisar manual pelo nome" label="Pesquisar manual pelo nome" allLabel="Todos os manuais" emptyText="Nenhum manual encontrado" /></div>
       <div className="filter-field"><label htmlFor="operator-search">Pessoa</label><SearchSelect id="operator-search" value={operatorFilter} onChange={setOperatorFilter} options={operatorOptions} placeholder="Pesquisar pessoa pelo nome" label="Pesquisar pessoa pelo nome" allLabel="Todas as pessoas" emptyText="Nenhuma pessoa encontrada" /></div>

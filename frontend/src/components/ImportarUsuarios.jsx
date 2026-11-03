@@ -7,6 +7,7 @@
 import { useRef, useState } from 'react';
 import { Download, Upload, UserPlus } from 'lucide-react';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
+import { useToast } from '../context/ToastContext.jsx';
 import { downloadCsv, parseCsv, readTextFile } from '../utils/csv.js';
 
 // Nomes de coluna aceitos no cabeçalho, comparados sem acento e sem maiúsculas.
@@ -50,7 +51,7 @@ export default function ImportarUsuarios({ apiUrl, token, sectors, onImported })
   const [check, setCheck] = useState(null);
   const [result, setResult] = useState(null);
   const [fileName, setFileName] = useState('');
-  const [error, setError] = useState('');
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const fileInput = useRef(null);
   const errors = check ? check.total - check.validos : 0;
@@ -76,23 +77,25 @@ export default function ImportarUsuarios({ apiUrl, token, sectors, onImported })
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    setError(''); setCheck(null); setResult(null); setRows([]); setFileName(file.name);
+    setCheck(null); setResult(null); setRows([]); setFileName(file.name);
     setBusy(true);
     try {
       const parsed = toImportRows(parseCsv(await readTextFile(file)));
       if (!parsed.length) throw new Error('A planilha não tem usuários abaixo do cabeçalho.');
       setCheck(await send({ rows: parsed, dryRun: true }));
       setRows(parsed);
-    } catch (reason) { setError(reason.message); } finally { setBusy(false); }
+    } catch (reason) { toast.error(reason.message); } finally { setBusy(false); }
   }
 
   async function importValid() {
-    setBusy(true); setError('');
+    setBusy(true);
     try {
-      setResult(await send({ rows }));
+      const imported = await send({ rows });
+      setResult(imported);
+      toast.success(`${imported.criados} ${imported.criados === 1 ? 'usuário cadastrado' : 'usuários cadastrados'} com sucesso.`);
       setCheck(null); setRows([]);
       await onImported?.();
-    } catch (reason) { setError(reason.message); } finally { setBusy(false); }
+    } catch (reason) { toast.error(reason.message); } finally { setBusy(false); }
   }
 
   function downloadAccesses() {
@@ -116,7 +119,6 @@ export default function ImportarUsuarios({ apiUrl, token, sectors, onImported })
       <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={chooseFile} />
     </div>
     {busy && <p className="hint">Processando a planilha...</p>}
-    {error && <p className="alert">{error}</p>}
     {check && <>
       <p className={errors ? 'alert' : 'notice'}>
         {fileName}: {check.validos} de {check.total} {check.total === 1 ? 'linha pronta' : 'linhas prontas'} para cadastrar.
@@ -128,7 +130,6 @@ export default function ImportarUsuarios({ apiUrl, token, sectors, onImported })
       </div>
     </>}
     {result && <>
-      <p className="notice">{result.criados} {result.criados === 1 ? 'usuário cadastrado' : 'usuários cadastrados'} com sucesso.</p>
       {result.acessos.some((access) => access.senha) && <p className="alert">Baixe agora a lista de acessos: as senhas provisórias não aparecem de novo.</p>}
       <div className="import-actions">
         <button type="button" className="primary-button" onClick={downloadAccesses}><Download size={16} />Baixar lista de acessos</button>

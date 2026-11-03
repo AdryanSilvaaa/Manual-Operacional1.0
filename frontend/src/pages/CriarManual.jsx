@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { ROLES } from '../constants/roles.js';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
@@ -20,7 +21,7 @@ export default function CriarManual() {
   const [systems, setSystems] = useState([]);
   const [sectors, setSectors] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
-  const [message, setMessage] = useState('');
+  const toast = useToast();
   const [directUpload, setDirectUpload] = useState(false);
   const [sending, setSending] = useState('');
   // Trocar a chave recria o formulário e limpa os campos de arquivo depois de um cadastro.
@@ -40,34 +41,32 @@ export default function CriarManual() {
       setSectors(await readResponse(sectorsResponse));
       setDirectUpload(Boolean((await getUploadConfig(apiUrl, token)).directUpload));
     }
-    loadOptions().catch((error) => setMessage(error.message));
-  }, [apiUrl, token]);
+    loadOptions().catch((error) => toast.error(error.message));
+  }, [apiUrl, token, toast]);
 
-  // Confere tamanho e duração ao escolher o arquivo; fora do limite, o campo é limpo e o motivo aparece no aviso.
+  // Confere tamanho e duração ao escolher o arquivo; fora do limite, o campo é limpo e o motivo aparece em um pop-up.
   async function chooseFile(kind, input) {
     const file = input.files[0] || null;
     const problem = await validateManualFile(kind, file);
     if (problem) {
       input.value = '';
       setForm((current) => ({ ...current, [kind]: null }));
-      setMessage(problem);
+      toast.error(problem);
       return;
     }
-    setMessage('');
     setForm((current) => ({ ...current, [kind]: file }));
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     if (!fixedSector && !form.sectorIds.length) {
-      setMessage('Selecione pelo menos um setor.');
+      toast.error('Selecione pelo menos um setor.');
       return;
     }
     if (!form.pdf && !form.video) {
-      setMessage('Escolha pelo menos o PDF ou o vídeo do manual.');
+      toast.error('Escolha pelo menos o PDF ou o vídeo do manual.');
       return;
     }
-    setMessage('');
     setSending('Enviando...');
     try {
       const { pdf, video, ...fields } = form;
@@ -76,14 +75,13 @@ export default function CriarManual() {
       await readResponse(response);
       setForm(INITIAL_FORM);
       setFormKey((current) => current + 1);
-      setMessage('Manual cadastrado com sucesso.');
-    } catch (error) { setMessage(error.message); } finally { setSending(''); }
+      toast.success('Manual cadastrado com sucesso.');
+    } catch (error) { toast.error(error.message); } finally { setSending(''); }
   }
 
   return <section className="admin-page">
     <BackButton fallback="/configuracoes" />
     <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Criar Manual</h1></div>
-    {message && <p className="notice">{message}</p>}
     <form key={formKey} className="admin-panel manual-form" onSubmit={handleSubmit}>
       <label>Sistema<select value={form.systemId} onChange={(event) => setForm({ ...form, systemId: event.target.value })} required><option value="">Selecione</option>{systems.map((system) => <option value={system.id} key={system.id}>{system.nome}</option>)}</select></label>
       {fixedSector ? <label>Setor<input value={sectorOptions[0]?.nome || 'Usuário sem setor definido'} disabled /></label> : <fieldset>

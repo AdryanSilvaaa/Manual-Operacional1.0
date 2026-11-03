@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
 
@@ -15,7 +16,7 @@ export default function CadastroSistemas() {
   const { apiUrl, token } = useAuth();
   const [systems, setSystems] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
-  const [message, setMessage] = useState('');
+  const toast = useToast();
   // Sistema em edição na lista (cópia com nome e resumo alterados); null quando nenhum está sendo editado.
   const [editing, setEditing] = useState(null);
 
@@ -24,36 +25,34 @@ export default function CadastroSistemas() {
     setSystems(await readResponse(response));
   }
 
-  useEffect(() => { loadSystems().catch((error) => setMessage(error.message)); }, [apiUrl, token]);
+  useEffect(() => { loadSystems().catch((error) => toast.error(error.message)); }, [apiUrl, token, toast]);
 
   // Cria um sistema global, sem qualquer vínculo com setor.
   async function handleSubmit(event) {
     event.preventDefault();
-    setMessage('');
     try {
       const response = await fetch(`${apiUrl}/api/systems`, {
         method: 'POST', headers: createAuthHeaders(token), body: JSON.stringify(form)
       });
       await readResponse(response);
       setForm(INITIAL_FORM);
-      setMessage('Sistema cadastrado com sucesso.');
+      toast.success('Sistema cadastrado com sucesso.');
       await loadSystems();
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { toast.error(error.message); }
   }
 
   // Salva o nome e o resumo editados direto na linha da lista; os manuais continuam ligados ao mesmo sistema.
   async function handleSave() {
     if (!editing) return;
-    setMessage('');
     try {
       const response = await fetch(`${apiUrl}/api/systems/${editing.id}`, {
         method: 'PUT', headers: createAuthHeaders(token), body: JSON.stringify({ nome: editing.nome, resumo: editing.resumo })
       });
       await readResponse(response);
       setEditing(null);
-      setMessage('Sistema atualizado com sucesso.');
+      toast.success('Sistema atualizado com sucesso.');
       await loadSystems();
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { toast.error(error.message); }
   }
 
   // Exclui o sistema após confirmação explícita do suporte.
@@ -64,14 +63,14 @@ export default function CadastroSistemas() {
         method: 'DELETE', headers: createAuthHeaders(token)
       });
       await readResponse(response);
+      toast.success('Sistema removido.');
       await loadSystems();
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { toast.error(error.message); }
   }
 
   return <section className="admin-page">
     <BackButton fallback="/configuracoes" />
     <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Cadastrar Sistemas</h1></div>
-    {message && <p className="notice">{message}</p>}
     <div className="admin-grid">
       <form className="admin-panel" onSubmit={handleSubmit}>
         <h2>Novo sistema</h2>

@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
 import SearchField from '../components/SearchField.jsx';
@@ -31,7 +32,7 @@ export default function Usuarios() {
   const [sectors, setSectors] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [editingUser, setEditingUser] = useState(null);
-  const [message, setMessage] = useState('');
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const filteredUsers = users.filter((user) => normalize(user.nome).includes(normalize(search)));
 
@@ -44,7 +45,7 @@ export default function Usuarios() {
     setSectors(await readResponse(sectorsResponse));
   }
 
-  useEffect(() => { loadData().catch((error) => setMessage(error.message)); }, [apiUrl, token]);
+  useEffect(() => { loadData().catch((error) => toast.error(error.message)); }, [apiUrl, token, toast]);
 
   // Mantém o formulário de criação independente da edição em linha.
   function updateCreateForm(field, value) { setForm((current) => ({ ...current, [field]: value })); }
@@ -52,16 +53,15 @@ export default function Usuarios() {
 
   async function handleCreate(event) {
     event.preventDefault();
-    setMessage('');
     try {
       const response = await fetch(`${apiUrl}/api/auth/register`, {
         method: 'POST', headers: createAuthHeaders(token), body: JSON.stringify(form)
       });
       await readResponse(response);
       setForm(INITIAL_FORM);
-      setMessage('Usuário cadastrado com sucesso.');
+      toast.success('Usuário cadastrado com sucesso.');
       await loadData();
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { toast.error(error.message); }
   }
 
   // Salva nome, perfil, identificador e setores do usuário selecionado; a senha só vai quando preenchida.
@@ -74,9 +74,9 @@ export default function Usuarios() {
       });
       await readResponse(response);
       setEditingUser(null);
-      setMessage(editingUser.senha ? 'Usuário e senha atualizados com sucesso.' : 'Usuário atualizado com sucesso.');
+      toast.success(editingUser.senha ? 'Usuário e senha atualizados com sucesso.' : 'Usuário atualizado com sucesso.');
       await loadData();
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { toast.error(error.message); }
   }
 
   async function handleDelete(user) {
@@ -86,8 +86,9 @@ export default function Usuarios() {
         method: 'DELETE', headers: createAuthHeaders(token)
       });
       await readResponse(response);
+      toast.success(`Usuário ${user.nome} removido.`);
       await loadData();
-    } catch (error) { setMessage(error.message); }
+    } catch (error) { toast.error(error.message); }
   }
 
   function RoleSelect({ value, onChange }) {
@@ -97,7 +98,6 @@ export default function Usuarios() {
   return <section className="admin-page">
     <BackButton fallback="/configuracoes" />
     <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Criar / Alterar Usuários</h1></div>
-    {message && <p className="notice">{message}</p>}
     <div className="admin-grid">
       <form className="admin-panel" onSubmit={handleCreate}>
         <h2>Novo usuário</h2>

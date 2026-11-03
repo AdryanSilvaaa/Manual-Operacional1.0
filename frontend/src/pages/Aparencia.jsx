@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { ImageUp, Palette, RotateCcw, Save } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useBranding } from '../context/BrandingContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
 import { BRAND_COLOR_GROUPS, BRAND_COLORS, contrastRatio, DEFAULT_LOGOS, LOGO_TYPES, MAX_LOGO_KB } from '../constants/branding.js';
@@ -31,8 +32,7 @@ export default function Aparencia() {
   const { branding, preview, commit } = useBranding();
   const [draft, setDraft] = useState(() => fromBranding(branding));
   const [edited, setEdited] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
 
   // Se a aparência salva chegar da API depois de abrir a tela (página recarregada aqui), usa ela enquanto nada foi editado.
@@ -46,7 +46,6 @@ export default function Aparencia() {
   const lowContrast = contrastRatio(colorOf('primaryText'), colorOf('primary')) < 3;
 
   function setColor(key, value) {
-    setMessage('');
     setEdited(true);
     setDraft((current) => ({ ...current, colors: { ...current.colors, [key]: value } }));
   }
@@ -64,9 +63,8 @@ export default function Aparencia() {
     const file = input.files[0];
     input.value = '';
     if (!file) return;
-    setError('');
-    if (!LOGO_TYPES.includes(file.type)) return setError('Envie a logo em PNG, JPG, WebP ou SVG.');
-    if (file.size > MAX_LOGO_KB * 1024) return setError(`A logo tem ${Math.round(file.size / 1024)} KB. O limite é ${MAX_LOGO_KB} KB.`);
+    if (!LOGO_TYPES.includes(file.type)) return toast.error('Envie a logo em PNG, JPG, WebP ou SVG.');
+    if (file.size > MAX_LOGO_KB * 1024) return toast.error(`A logo tem ${Math.round(file.size / 1024)} KB. O limite é ${MAX_LOGO_KB} KB.`);
     const dataUrl = await readAsDataUrl(file);
     setEdited(true);
     setDraft((current) => ({ ...current, [key]: dataUrl }));
@@ -75,16 +73,15 @@ export default function Aparencia() {
   async function handleSave() {
     // Campo de texto com cor incompleta não é enviado: a API só aceita #RRGGBB.
     const invalid = Object.entries(draft.colors).find(([, value]) => !HEX.test(value));
-    if (invalid) return setError(`Cor inválida: "${invalid[1]}". Use o formato #RRGGBB.`);
+    if (invalid) return toast.error(`Cor inválida: "${invalid[1]}". Use o formato #RRGGBB.`);
     setSaving(true);
-    setError('');
     try {
       const response = await fetch(`${apiUrl}/api/branding`, { method: 'PUT', headers: createAuthHeaders(token), body: JSON.stringify(draft) });
       commit(await readResponse(response));
       setEdited(false);
-      setMessage('Aparência salva. Ela vale para todos os usuários no próximo carregamento da página.');
+      toast.success('Aparência salva. Ela vale para todos os usuários no próximo carregamento da página.');
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     } finally {
       setSaving(false);
     }
@@ -93,21 +90,17 @@ export default function Aparencia() {
   function discard() {
     setDraft(fromBranding(branding));
     setEdited(false);
-    setMessage('');
-    setError('');
   }
 
   function restoreDefaults() {
     setEdited(true);
     setDraft({ colors: {}, logoLight: null, logoDark: null });
-    setMessage('Cores e logos padrão carregadas. Clique em Salvar para aplicar a todos.');
+    toast.info('Cores e logos padrão carregadas. Clique em Salvar para aplicar a todos.');
   }
 
   return <section className="admin-page">
     <BackButton fallback="/configuracoes" />
     <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Aparência</h1><p>Cores e logos da plataforma. O que você muda aqui aparece na hora nesta tela; os demais usuários só veem depois de salvar.</p></div>
-    {message && <p className="notice">{message}</p>}
-    {error && <p className="alert">{error}</p>}
 
     <div className="branding-layout">
       <div className="branding-settings">

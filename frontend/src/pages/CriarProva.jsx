@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import { ALL_SECTOR_ROLES } from '../constants/roles.js';
 import { MAX_QUESTIONS, OPTION_LETTERS, QUESTION_TYPES } from '../constants/exam.js';
@@ -21,8 +22,7 @@ export default function CriarProva() {
   const { apiUrl, token, user } = useAuth();
   const [form, setForm] = useState(INITIAL_FORM);
   const [questions, setQuestions] = useState([newQuestion()]);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const toast = useToast();
   const [sectors, setSectors] = useState([]);
   const allSectors = ALL_SECTOR_ROLES.includes(user.role);
   const ownSectors = user.setores || [];
@@ -30,8 +30,8 @@ export default function CriarProva() {
   useEffect(() => {
     if (!allSectors) return;
     fetch(`${apiUrl}/api/sectors`, { headers: createAuthHeaders(token) })
-      .then(readResponse).then(setSectors).catch((requestError) => setError(requestError.message));
-  }, [apiUrl, token, allSectors]);
+      .then(readResponse).then(setSectors).catch((requestError) => toast.error(requestError.message));
+  }, [apiUrl, token, allSectors, toast]);
 
   function updateQuestion(index, changes) {
     setQuestions((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...changes } : item)));
@@ -45,8 +45,6 @@ export default function CriarProva() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setMessage('');
-    setError('');
     const payload = {
       ...form,
       // datetime-local não tem fuso; a conversão usa o horário do computador de quem cria.
@@ -63,15 +61,13 @@ export default function CriarProva() {
       const audience = allSectors && form.sectorId === ALL_SECTORS ? 'de todos os setores' : 'do setor';
       setForm(INITIAL_FORM);
       setQuestions([newQuestion()]);
-      setMessage(`Prova criada. Os colaboradores ${audience} serão avisados no período de realização.`);
-    } catch (requestError) { setError(requestError.message); }
+      toast.success(`Prova criada. Os colaboradores ${audience} serão avisados no período de realização.`);
+    } catch (requestError) { toast.error(requestError.message); }
   }
 
   return <section className="admin-page">
     <BackButton fallback="/configuracoes" />
     <div className="page-heading"><p className="eyebrow">Configurações</p><h1>Criar Prova</h1></div>
-    {message && <p className="notice">{message}</p>}
-    {error && <p className="alert">{error}</p>}
     <form className="admin-panel manual-form" onSubmit={handleSubmit}>
       {allSectors && <label>Setor<select value={form.sectorId} onChange={(event) => setForm({ ...form, sectorId: event.target.value })}>
         <option value={ALL_SECTORS}>Todos os setores</option>

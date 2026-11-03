@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Play, Send } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import { OPTION_LETTERS, QUESTION_TYPES, formatDateTime } from '../constants/exam.js';
 import BackButton from '../components/BackButton.jsx';
@@ -22,7 +23,7 @@ export default function RealizarProva() {
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState(null);
   const [answers, setAnswers] = useState({});
-  const [error, setError] = useState('');
+  const toast = useToast();
   const [starting, setStarting] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -46,8 +47,8 @@ export default function RealizarProva() {
 
   useEffect(() => {
     fetch(`${apiUrl}/api/exams/${id}`, { headers: createAuthHeaders(token) })
-      .then(readResponse).then(setExam).catch((requestError) => setError(requestError.message));
-  }, [apiUrl, id, token]);
+      .then(readResponse).then(setExam).catch((requestError) => toast.error(requestError.message));
+  }, [apiUrl, id, token, toast]);
 
   // Enquanto a prova está em andamento, qualquer saída da página encerra a prova no servidor.
   useEffect(() => {
@@ -99,14 +100,13 @@ export default function RealizarProva() {
   }, [apiUrl, id, inProgress, token]);
 
   async function handleStart() {
-    setError('');
     setStarting(true);
     try {
       const response = await fetch(`${apiUrl}/api/exams/${id}/start`, { method: 'POST', headers: createAuthHeaders(token) });
       const started = await readResponse(response);
       setQuestions(started.questions);
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
       setExam(null);
     } finally {
       setStarting(false);
@@ -116,7 +116,6 @@ export default function RealizarProva() {
   async function handleSubmit(event) {
     event.preventDefault();
     if (!confirmInPage('Depois de enviar não é possível alterar as respostas. Enviar a prova?')) return;
-    setError('');
     setSending(true);
     try {
       const response = await fetch(`${apiUrl}/api/exams/${id}/submissions`, { method: 'POST', headers: createAuthHeaders(token), body: JSON.stringify({ answers }) });
@@ -124,7 +123,7 @@ export default function RealizarProva() {
       finishedRef.current = true;
       setSent(true);
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     } finally {
       setSending(false);
     }
@@ -145,7 +144,6 @@ export default function RealizarProva() {
     return <section className="admin-page">
       {heading}
       <p className="exam-lock-banner"><AlertTriangle size={18} /> Prova em andamento. Não saia desta página nem troque de aba ou de janela até enviar: isso encerra a prova.</p>
-      {error && <p className="alert">{error}</p>}
       <form className="admin-panel manual-form quiz-form" onSubmit={handleSubmit}>
         {questions.map((question, index) => <fieldset key={question.id}>
           <legend>Pergunta {index + 1}</legend>
@@ -165,7 +163,6 @@ export default function RealizarProva() {
   return <section className="admin-page">
     <BackButton fallback="/provas" />
     {heading}
-    {error && <p className="alert">{error}</p>}
     {exam && <div className="admin-panel manual-form exam-start">
       <h2>Antes de começar</h2>
       <ul>

@@ -7,21 +7,21 @@ import { LogIn } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ROLES } from '../constants/roles.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import BrandLogo from './BrandLogo.jsx';
 
 export default function Login() {
   const [identificador, setIdentificador] = useState('');
   const [senha, setSenha] = useState('');
-  const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
   async function handleSubmit(event) {
     event.preventDefault();
     setSubmitting(true);
-    setError('');
 
     try {
       const user = await login(identificador, senha);
@@ -29,7 +29,7 @@ export default function Login() {
       const defaultPage = user.role === ROLES.MANAGER ? '/configuracoes' : '/sistemas';
       navigate(requestedPage || defaultPage, { replace: true });
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setSubmitting(false);
     }
@@ -43,8 +43,6 @@ export default function Login() {
           <p className="eyebrow">Acesso seguro</p>
           <h1>Entrar no sistema</h1>
         </div>
-
-        {error && <p className="alert">{error}</p>}
 
         <label>
           Usuário
