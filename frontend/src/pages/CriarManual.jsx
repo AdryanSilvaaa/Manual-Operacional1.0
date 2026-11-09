@@ -1,6 +1,8 @@
 /**
  * Formulário de upload e vínculo do manual com sistema e um ou mais setores.
  * Alterar nomes dos campos exige sincronizar middleware/upload.js e manualController.js.
+ * Opcionalmente cadastra a prova do manual (campo exam, em JSON), liberada quando o colaborador conclui 100% do conteúdo:
+ * obrigatória (ele faz na hora) ou não obrigatória (ele pode deixar para depois).
  */
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
@@ -12,8 +14,22 @@ import BackButton from '../components/BackButton.jsx';
 import SectorPicker from '../components/SectorPicker.jsx';
 import { MAX_PDF_MB, MAX_VIDEO_MB, MAX_VIDEO_MINUTES, validateManualFile } from '../constants/uploads.js';
 import { buildManualRequest, getUploadConfig } from '../utils/directUpload.js';
+import ExamQuestionsEditor, { newQuestion, serializeQuestions } from '../components/ExamQuestionsEditor.jsx';
+import TemplatePicker from '../components/TemplatePicker.jsx';
 
 const INITIAL_FORM = { systemId: '', titulo: '', descricao: '', sectorIds: [], pdf: null, video: null };
+const INITIAL_EXAM = { enabled: false, required: true, titulo: '', descricao: '', templateId: null };
+
+/** Prova do manual no formato do backend; sem título próprio, usa "Prova - <título do manual>". Não tem prazo: fica disponível até o colaborador fazer. */
+function buildExamPayload(exam, questions, manualTitle) {
+  return JSON.stringify({
+    titulo: exam.titulo.trim() || `Prova - ${manualTitle.trim()}`,
+    descricao: exam.descricao,
+    required: exam.required,
+    templateId: exam.templateId,
+    questions: serializeQuestions(questions)
+  });
+}
 
 /** Envia o material e o associa ao sistema e aos setores autorizados. */
 export default function CriarManual() {
@@ -21,6 +37,8 @@ export default function CriarManual() {
   const [systems, setSystems] = useState([]);
   const [sectors, setSectors] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [exam, setExam] = useState(INITIAL_EXAM);
+  const [questions, setQuestions] = useState([newQuestion()]);
   const toast = useToast();
   const [directUpload, setDirectUpload] = useState(false);
   const [sending, setSending] = useState('');
@@ -69,13 +87,16 @@ export default function CriarManual() {
     }
     setSending('Enviando...');
     try {
-      const { pdf, video, ...fields } = form;
+      const { pdf, video, ...formFields } = form;
+      const fields = exam.enabled ? { ...formFields, exam: buildExamPayload(exam, questions, form.titulo) } : formFields;
       const { headers, body } = await buildManualRequest({ apiUrl, token, directUpload, fields, pdf, video, onStatus: setSending });
       const response = await fetch(`${apiUrl}/api/manuals`, { method: 'POST', headers, body });
       await readResponse(response);
       setForm(INITIAL_FORM);
+      setExam(INITIAL_EXAM);
+      setQuestions([newQuestion()]);
       setFormKey((current) => current + 1);
-      toast.success('Manual cadastrado com sucesso.');
+      toast.success(exam.enabled ? 'Manual e prova cadastrados com sucesso.' : 'Manual cadastrado com sucesso.');
     } catch (error) { toast.error(error.message); } finally { setSending(''); }
   }
 
@@ -94,6 +115,24 @@ export default function CriarManual() {
       <label>PDF<input type="file" accept="application/pdf" onChange={(event) => chooseFile('pdf', event.target)} /><span className="hint">Até {MAX_PDF_MB} MB.</span></label>
       <label>Vídeo<input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(event) => chooseFile('video', event.target)} /><span className="hint">Até {MAX_VIDEO_MINUTES} minutos e {MAX_VIDEO_MB} MB. Prefira MP4 (H.264) em 1080p ou 720p.</span></label>
       <p className="hint">Envie o PDF, o vídeo ou os dois. Pelo menos um deles é obrigatório.</p>
+      <fieldset className="manual-exam-options">
+        <legend>Prova do manual</legend>
+        <label className="checkbox-line"><input type="checkbox" checked={exam.enabled} onChange={(event) => setExam({ ...exam, enabled: event.target.checked })} />Cadastrar prova deste manual</label>
+        {exam.enabled && <>
+          <div className="exam-mode" role="radiogroup" aria-label="Tipo da prova">
+            <label className="quiz-option"><input type="radio" name="exam-required" checked={exam.required} onChange={() => setExam({ ...exam, required: true })} /><span><strong>Prova obrigatória</strong><br />Ao concluir 100% do conteúdo, o colaborador precisa fazer a prova na hora.</span></label>
+            <label className="quiz-option"><input type="radio" name="exam-required" checked={!exam.required} onChange={() => setExam({ ...exam, required: false })} /><span><strong>Prova não obrigatória</strong><br />Ao concluir 100% do conteúdo, a prova é exibida, mas ele pode fazer depois pelo menu Provas. A prova não expira.</span></label>
+          </div>
+          <label>Título da prova (opcional)<input value={exam.titulo} placeholder={form.titulo ? `Prova - ${form.titulo}` : 'Prova - título do manual'} onChange={(event) => setExam({ ...exam, titulo: event.target.value })} /></label>
+          <label>Orientações (opcional)<textarea value={exam.descricao} onChange={(event) => setExam({ ...exam, descricao: event.target.value })} /></label>
+          <TemplatePicker value={exam.templateId} onPick={(template) => {
+            if (!template) { setExam({ ...exam, templateId: null }); return; }
+            setExam({ ...exam, templateId: template.id, titulo: template.titulo, descricao: template.descricao || '' });
+            setQuestions(template.editorQuestions);
+          }} />
+          <ExamQuestionsEditor questions={questions} onChange={setQuestions} />
+        </>}
+      </fieldset>
       <button className="primary-button" disabled={Boolean(sending)}>{sending || <><Plus size={18} />Cadastrar manual</>}</button>
     </form>
   </section>;

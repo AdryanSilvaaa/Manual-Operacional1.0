@@ -3,6 +3,7 @@
  * Alterar dados, contadores ou métodos aqui muda somente o modo de demonstração.
  */
 import { canManageManual, hasSector, seesAllSectors } from '../utils/access.js';
+import { isExamOpen } from '../utils/exam.js';
 
 const ADMIN_PASSWORD_HASH = '$2a$10$aEV41I/MA/qN00fWXu5UCuO/kPA0KT.DG5Br/zho02MdrowLgDIeC';
 
@@ -183,7 +184,8 @@ export const demoStore = {
           sector_names: manual.sector_ids.map((id) => this.findSectorById(id)?.nome).filter(Boolean),
           first_access_at: progress?.first_access_at || null,
           completed_at: progress?.completed_at || null,
-          progress_percent: Math.round((pdfPercent + videoPercent) / parts)
+          progress_percent: Math.round((pdfPercent + videoPercent) / parts),
+          ...this.manualExamColumns(manual.id, user.id)
         };
       });
   },
@@ -192,11 +194,27 @@ export const demoStore = {
     return this.listManualsForUser(user).find((manual) => Number(manual.id) === Number(id));
   },
 
+  // Como no banco: exam_id, exam_required, exam_open e exam_status da prova do manual para o usuário.
+  manualExamColumns(manualId, userId) {
+    const exam = exams.find((item) => Number(item.manual_id) === Number(manualId));
+    if (!exam) return { exam_id: null, exam_required: null, exam_open: null, exam_status: null };
+    return { exam_id: exam.id, exam_required: exam.required, exam_open: isExamOpen(exam), exam_status: this.findSubmission(exam.id, userId)?.status || null };
+  },
+
+  getManualExamAccess(manualId, user) {
+    const manual = manuals.find((item) => Number(item.id) === Number(manualId));
+    return {
+      hasAccess: Boolean(manual && manual.active !== false && manual.sector_ids.some((id) => hasSector(user, id))),
+      completed: Boolean(this.getProgress(user.id, manualId)?.completed_at)
+    };
+  },
+
   // Como no banco: sector_ids são todos os setores do manual e sector_id o primeiro escolhido.
-  createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, criadoPor }) {
+  createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, criadoPor, exam = null }) {
     const manual = { id: nextManualId++, titulo, descricao, pdf_url: pdfUrl, video_url: videoUrl, system_id: Number(systemId), sector_id: sectorIds[0], sector_ids: sectorIds.map(Number), criado_por: criadoPor, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     manuals.unshift(manual);
-    return manual;
+    const createdExam = exam ? this.createExam({ ...exam, sectorId: null, manualId: manual.id, criadoPor }) : null;
+    return { ...manual, exam_id: createdExam?.id || null, exam_required: createdExam?.required ?? null };
   },
 
   updateManual(id, data) {
@@ -229,6 +247,9 @@ export const demoStore = {
   deleteManual(id) {
     const index = manuals.findIndex((manual) => Number(manual.id) === Number(id));
     if (index >= 0) manuals.splice(index, 1);
+    // Como o ON DELETE CASCADE de exams.manual_id: a prova do manual sai junto.
+    const examIndex = exams.findIndex((exam) => Number(exam.manual_id) === Number(id));
+    if (examIndex >= 0) exams.splice(examIndex, 1);
   },
 
   getProgress(userId, manualId) {
@@ -253,9 +274,9 @@ export const demoStore = {
     return item;
   },
 
-  createExam({ titulo, descricao, sectorId, criadoPor, startsAt, endsAt, questions }) {
+  createExam({ titulo, descricao, sectorId = null, criadoPor, startsAt, endsAt, questions, manualId = null, required = false }) {
     const now = new Date().toISOString();
-    const exam = { id: nextExamId++, titulo, descricao, sector_id: sectorId === null ? null : Number(sectorId), criado_por: criadoPor, starts_at: startsAt, ends_at: endsAt, active: true, created_at: now, updated_at: now };
+    const exam = { id: nextExamId++, titulo, descricao, sector_id: sectorId === null ? null : Number(sectorId), criado_por: criadoPor, starts_at: startsAt, ends_at: endsAt, manual_id: manualId === null ? null : Number(manualId), required: Boolean(required), active: true, created_at: now, updated_at: now };
     exams.push(exam);
     questions.forEach((question, position) => examQuestions.push({ id: nextExamQuestionId++, exam_id: exam.id, position, type: question.type, prompt: question.prompt, options: question.options, correct_option: question.correctOption }));
     return { ...exam, question_count: questions.length };
@@ -263,10 +284,21 @@ export const demoStore = {
 
   listAvailableExams(user) {
     const now = new Date();
+    // Prova de manual: setores do manual e liberada só depois de concluir o manual (igual ao banco).
+    const canSee = (exam) => {
+      if (!exam.manual_id) return exam.sector_id === null || hasSector(user, exam.sector_id);
+      const access = this.getManualExamAccess(exam.manual_id, user);
+      return access.hasAccess && access.completed;
+    };
+    const deadline = (exam) => (exam.ends_at ? new Date(exam.ends_at).getTime() : Infinity);
     return exams
-      .filter((exam) => (exam.sector_id === null || hasSector(user, exam.sector_id)) && exam.active && new Date(exam.starts_at) <= now && now <= new Date(exam.ends_at) && !this.hasSubmission(exam.id, user.id))
-      .sort((left, right) => new Date(left.ends_at) - new Date(right.ends_at))
-      .map(({ id, titulo, descricao, starts_at, ends_at }) => ({ id, titulo, descricao, starts_at, ends_at, question_count: this.listExamQuestions(id).length }));
+      .filter((exam) => canSee(exam) && isExamOpen(exam, now) && !this.hasSubmission(exam.id, user.id))
+      .sort((left, right) => Number(right.required) - Number(left.required) || deadline(left) - deadline(right))
+      .map(({ id, titulo, descricao, starts_at, ends_at, manual_id, required }) => ({
+        id, titulo, descricao, starts_at, ends_at, manual_id, required,
+        manual_titulo: manuals.find((manual) => Number(manual.id) === Number(manual_id))?.titulo || null,
+        question_count: this.listExamQuestions(id).length
+      }));
   },
 
   findExamById(id) {
@@ -312,13 +344,28 @@ export const demoStore = {
     const managerScope = user.role === 'gerente_setor';
     // Para o gerente, só contam colaboradores que pertencem a um dos setores dele.
     const userInScope = (item) => !managerScope || (item?.sector_ids || []).some((id) => hasSector(user, id));
-    const examSectorMatches = (item, exam) => exam.sector_id === null || (item.sector_ids || []).includes(Number(exam.sector_id));
+    // Prova de manual vale para os setores do manual; a avulsa, para exam.sector_id (nulo = todos).
+    const manualOf = (exam) => manuals.find((manual) => Number(manual.id) === Number(exam.manual_id));
+    const examSectorIds = (exam) => (exam.manual_id ? manualOf(exam)?.sector_ids || [] : exam.sector_id === null ? null : [Number(exam.sector_id)]);
+    const examSectorMatches = (item, exam) => {
+      const ids = examSectorIds(exam);
+      return ids === null || (item.sector_ids || []).some((id) => ids.includes(Number(id)));
+    };
+    const sectorNames = (exam) => {
+      const ids = examSectorIds(exam);
+      return ids === null ? ['Todos os setores'] : ids.map((id) => this.findSectorById(id)?.nome).filter(Boolean).sort();
+    };
     return exams
-      .filter((exam) => exam.sector_id === null || !managerScope || hasSector(user, exam.sector_id))
+      .filter((exam) => {
+        const ids = examSectorIds(exam);
+        return !managerScope || ids === null || ids.some((id) => hasSector(user, id));
+      })
       .sort((left, right) => new Date(right.starts_at) - new Date(left.starts_at))
       .map((exam) => ({
         ...exam,
-        sector_name: exam.sector_id === null ? 'Todos os setores' : this.findSectorById(exam.sector_id)?.nome,
+        manual_titulo: manualOf(exam)?.titulo || null,
+        sector_names: sectorNames(exam),
+        sector_name: sectorNames(exam).join(', '),
         criado_por_nome: users.find((item) => Number(item.id) === Number(exam.criado_por))?.nome || null,
         collaborators: users.filter((item) => item.role === 'usuario' && examSectorMatches(item, exam) && userInScope(item)).length,
         questions: this.listExamQuestions(exam.id, true).map((question) => ({ ...question, exam_id: exam.id })),
@@ -327,7 +374,7 @@ export const demoStore = {
           .filter((submission) => userInScope(findRawUser(submission.user_id)))
           .map((submission) => ({
             ...submission,
-            status: submission.status === 'em_andamento' && new Date() > new Date(exam.ends_at) ? 'encerrada' : submission.status,
+            status: submission.status === 'em_andamento' && exam.ends_at && new Date() > new Date(exam.ends_at) ? 'encerrada' : submission.status,
             user_name: users.find((item) => Number(item.id) === Number(submission.user_id))?.nome,
             answers: examAnswers.filter((answer) => answer.submission_id === submission.id)
           }))

@@ -20,7 +20,7 @@ export default function Provas() {
 
   return <section className="page-section">
     <BackButton fallback="/sistemas" />
-    <div className="page-heading"><p className="eyebrow">Avaliação</p><h1>Provas</h1><p>Provas dos seus setores disponíveis para realizar agora.</p></div>
+    <div className="page-heading"><p className="eyebrow">Avaliação</p><h1>Provas</h1><p>Provas dos seus setores disponíveis para realizar agora, incluindo as provas dos manuais que você já concluiu.</p></div>
     {exams && !exams.length && <p className="empty-state">Nenhuma prova disponível no momento.</p>}
     <div className="manual-grid">
       {exams?.map((exam) => <Link key={exam.id} to={`/provas/${exam.id}`} className="manual-card">
@@ -28,7 +28,9 @@ export default function Provas() {
         <div>
           <h2>{exam.titulo}</h2>
           <p>{exam.descricao || `${exam.question_count} pergunta(s)`}</p>
-          <small>Disponível até {formatDateTime(exam.ends_at)}</small>
+          {/* Toda prova da lista é obrigatória, exceto a prova de manual marcada como não obrigatória. */}
+          <p className="exam-tags"><span className={`status-pill ${exam.manual_id && !exam.required ? 'status-em-andamento' : 'status-encerrada'}`}>{exam.manual_id && !exam.required ? 'Não obrigatória' : 'Prova obrigatória'}</span></p>
+          <small>{exam.ends_at ? `Disponível até ${formatDateTime(exam.ends_at)}` : 'Sem prazo final'}</small>
         </div>
       </Link>)}
     </div>

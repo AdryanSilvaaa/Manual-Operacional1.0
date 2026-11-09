@@ -8,13 +8,17 @@ import {
   findExamById,
   findSubmission,
   finishSubmission,
+  getExamAssignment,
+  getManualExamAccess,
   listAvailableExams,
   listExamQuestions,
   listExamResults,
   startSubmission
 } from '../models/Exam.js';
 import { findSectorById } from '../models/Sector.js';
-import { SUBMISSION_STATUS, gradeSubmission, isExamOpen, validateExamPayload } from '../utils/exam.js';
+import { SUBMISSION_STATUS, gradeSubmission, isExamOpen, parseId, validateExamPayload } from '../utils/exam.js';
+import { getTemplate } from '../models/ExamTemplate.js';
+import { canUseTemplate } from './examTemplateController.js';
 import { hasSector, seesAllSectors } from '../utils/access.js';
 
 /** Executa no PostgreSQL e, só no modo demonstração sem banco, usa a memória. */
@@ -55,7 +59,12 @@ export async function store(req, res) {
   const sector = await resolveExamSector(req);
   if (sector.error) return res.status(400).json({ message: sector.error });
 
-  const data = { ...exam, sectorId: sector.sectorId, criadoPor: req.user.id };
+  // Prova montada a partir de um modelo (Criar Prova > Usar modelo): guarda a origem se o modelo for do setor do usuário.
+  const templateId = parseId(req.body?.templateId);
+  if (templateId && !canUseTemplate(req.user, await getTemplate(templateId))) {
+    return res.status(400).json({ message: 'Modelo de prova não encontrado ou sem permissão' });
+  }
+  const data = { ...exam, sectorId: sector.sectorId, criadoPor: req.user.id, templateId };
   const created = await withDemo(() => createExam(data), () => demoStore.createExam(data));
   res.status(201).json(created);
 }
@@ -86,9 +95,23 @@ async function closeSubmission(exam, userId, answers) {
  */
 async function loadExamForCollaborator(req, res, { inProgress = false } = {}) {
   const exam = await withDemo(() => findExamById(req.params.id), () => demoStore.findExamById(req.params.id));
-  const sameSector = exam?.sector_id === null || hasSector(req.user, exam?.sector_id);
+  // Prova de manual: vale para os setores do manual e só abre depois de o colaborador concluir 100% do conteúdo.
+  const manualAccess = exam?.manual_id
+    ? await withDemo(() => getManualExamAccess(exam.manual_id, req.user), () => demoStore.getManualExamAccess(exam.manual_id, req.user))
+    : null;
+  // Prova aplicada a colaboradores específicos: só eles podem abrir (o modo demonstração não tem essa opção).
+  const assignment = exam && !exam.manual_id
+    ? await withDemo(() => getExamAssignment(exam.id, req.user.id), () => ({ hasAssignees: false, isAssignee: false }))
+    : null;
+  const sameSector = manualAccess
+    ? manualAccess.hasAccess
+    : assignment?.hasAssignees ? assignment.isAssignee : exam?.sector_id === null || hasSector(req.user, exam?.sector_id);
   if (!exam || req.user.role !== 'usuario' || !sameSector) {
     res.status(404).json({ message: 'Prova não encontrada ou sem permissão' });
+    return null;
+  }
+  if (manualAccess && !manualAccess.completed) {
+    res.status(409).json({ message: 'Conclua 100% do manual para liberar esta prova' });
     return null;
   }
   if (!isExamOpen(exam)) {
@@ -118,8 +141,8 @@ export async function show(req, res) {
   const exam = await loadExamForCollaborator(req, res);
   if (!exam) return;
   const questions = await withDemo(() => listExamQuestions(exam.id), () => demoStore.listExamQuestions(exam.id));
-  const { id, titulo, descricao, starts_at, ends_at } = exam;
-  res.json({ id, titulo, descricao, starts_at, ends_at, question_count: questions.length });
+  const { id, titulo, descricao, starts_at, ends_at, manual_id, required } = exam;
+  res.json({ id, titulo, descricao, starts_at, ends_at, manual_id, required, question_count: questions.length });
 }
 
 // Inicia a prova (uma vez só) e envia as perguntas sem a alternativa correta.
@@ -129,8 +152,8 @@ export async function start(req, res) {
   const started = await withDemo(() => startSubmission(exam.id, req.user.id), () => demoStore.startSubmission(exam.id, req.user.id));
   if (!started) return res.status(409).json({ message: 'Esta prova já foi iniciada' });
   const questions = await withDemo(() => listExamQuestions(exam.id), () => demoStore.listExamQuestions(exam.id));
-  const { id, titulo, descricao, starts_at, ends_at } = exam;
-  res.status(201).json({ id, titulo, descricao, starts_at, ends_at, questions });
+  const { id, titulo, descricao, starts_at, ends_at, manual_id, required } = exam;
+  res.status(201).json({ id, titulo, descricao, starts_at, ends_at, manual_id, required, questions });
 }
 
 export async function submit(req, res) {

@@ -14,6 +14,7 @@ import systemRoutes from './routes/systems.js';
 import userRoutes from './routes/users.js';
 import progressRoutes from './routes/progress.js';
 import examRoutes from './routes/exams.js';
+import examTemplateRoutes from './routes/examTemplates.js';
 import uploadRoutes from './routes/uploads.js';
 import brandingRoutes from './routes/branding.js';
 import { pool } from './config/db.js';
@@ -60,6 +61,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/sectors', sectorRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/exams', examRoutes);
+app.use('/api/exam-templates', examTemplateRoutes);
 app.use('/api/uploads', uploadRoutes);
 
 // Piloto num computador só (SERVE_FRONTEND=true): o backend também entrega as telas geradas por

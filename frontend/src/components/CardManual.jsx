@@ -14,6 +14,7 @@ export default function CardManual({ manual }) {
         <p>{manual.descricao || 'Manual operacional disponivel para consulta.'}</p>
         <div className="card-progress"><span>{status}</span><strong>{manual.progress_percent || 0}%</strong></div>
         <div className="bar-track"><i style={{ width: `${manual.progress_percent || 0}%` }} /></div>
+        {manual.exam_id && <small className="card-exam">{manual.exam_required ? 'Prova obrigatória' : 'Prova não obrigatória'}{manual.exam_status ? ' · realizada' : manual.completed_at && manual.exam_open ? ' · pendente' : ''}</small>}
       </div>
     </Link>
   );

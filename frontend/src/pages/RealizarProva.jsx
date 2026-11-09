@@ -137,7 +137,7 @@ export default function RealizarProva() {
     return <section className="page-section"><BackButton fallback="/sistemas" /><p className="manual-complete"><CheckCircle2 size={20} /> Prova enviada. Obrigado!</p></section>;
   }
 
-  const heading = <div className="page-heading"><p className="eyebrow">Prova</p><h1>{exam?.titulo || 'Prova'}</h1>{exam && <p>{exam.descricao ? `${exam.descricao} · ` : ''}Disponível até {formatDateTime(exam.ends_at)}</p>}</div>;
+  const heading = <div className="page-heading"><p className="eyebrow">Prova</p><h1>{exam?.titulo || 'Prova'}</h1>{exam && <p>{exam.descricao ? `${exam.descricao} · ` : ''}{exam.ends_at ? `Disponível até ${formatDateTime(exam.ends_at)}` : 'Sem prazo final'}{exam.required ? ' · Prova obrigatória' : ''}</p>}</div>;
 
   // Sem botão Voltar durante a prova: a saída é pelo envio.
   if (inProgress) {

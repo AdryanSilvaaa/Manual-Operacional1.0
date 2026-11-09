@@ -19,6 +19,9 @@ import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import { findOrCreateSector, findSectorsByIds, listSectors } from '../models/Sector.js';
 import { canManageManual, hasSector, parseSectorIds } from '../utils/access.js';
 import { audit } from '../models/Audit.js';
+import { parseManualExam } from '../utils/exam.js';
+import { getTemplate } from '../models/ExamTemplate.js';
+import { canUseTemplate } from './examTemplateController.js';
 
 const hasFile = (req, kind) => Boolean(req.files?.[kind]?.[0] || req.body?.[`${kind}Key`]);
 // removePdf/removeVideo chegam como true (JSON) ou "true" (multipart).
@@ -171,6 +174,13 @@ export async function store(req, res) {
   if (!hasFile(req, 'pdf') && !hasFile(req, 'video')) {
     return res.status(400).json({ message: 'Envie pelo menos o PDF ou o vídeo' });
   }
+  // Prova do manual (opcional): validada antes de gravar os arquivos para não sobrar upload de um cadastro recusado.
+  const { error: examError, exam } = parseManualExam(req.body.exam);
+  if (examError) return res.status(400).json({ message: examError });
+  // Prova montada a partir de um modelo: o modelo precisa ser do setor de quem cadastra.
+  if (exam?.templateId && !canUseTemplate(req.user, await getTemplate(exam.templateId))) {
+    return res.status(400).json({ message: 'Modelo de prova não encontrado ou sem permissão' });
+  }
 
   const pdfUrl = await receiveFile(req, 'pdf');
   const videoUrl = await receiveFile(req, 'video');
@@ -184,7 +194,8 @@ export async function store(req, res) {
       videoUrl,
       systemId,
       sectorIds: sectors.ids,
-      criadoPor: req.user.id
+      criadoPor: req.user.id,
+      exam
     });
   } catch (error) {
     if (!shouldUseDemoStore(error)) {
@@ -198,10 +209,12 @@ export async function store(req, res) {
       videoUrl,
       systemId,
       sectorIds: sectors.ids,
-      criadoPor: req.user.id
+      criadoPor: req.user.id,
+      exam
     });
   }
 
+  if (exam) await auditManual(req, 'manual_exam_created', manual, { examId: manual.exam_id, required: exam.required });
   res.status(201).json(manual);
 }
 

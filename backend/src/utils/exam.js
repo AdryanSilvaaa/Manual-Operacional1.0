@@ -12,18 +12,16 @@ function isBlank(value) {
   return typeof value !== 'string' || !value.trim();
 }
 
-/** Valida e normaliza o corpo de criação; devolve { error } ou { exam }. */
-export function validateExamPayload(body = {}) {
-  const titulo = typeof body.titulo === 'string' ? body.titulo.trim() : '';
-  const startsAt = new Date(body.startsAt);
-  const endsAt = new Date(body.endsAt);
-  const questions = body.questions;
+const isEmpty = (value) => value === undefined || value === null || value === '';
+const cleanText = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+/** Id inteiro positivo ou null. */
+export function parseId(value) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
 
-  if (!titulo) return { error: 'Informe o título da prova' };
-  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-    return { error: 'Informe a data de início e a data final da prova' };
-  }
-  if (endsAt <= startsAt) return { error: 'A data final deve ser depois da data de início' };
+/** Valida e normaliza as perguntas (prova ou modelo); devolve { error } ou { questions }. */
+export function validateQuestions(questions) {
   if (!Array.isArray(questions) || !questions.length) return { error: 'Cadastre ao menos uma pergunta' };
   if (questions.length > MAX_QUESTIONS) return { error: `A prova pode ter no máximo ${MAX_QUESTIONS} perguntas` };
 
@@ -48,14 +46,54 @@ export function validateExamPayload(body = {}) {
     }
     normalized.push({ type: QUESTION_TYPES.MULTIPLE_CHOICE, prompt: question.prompt.trim(), options: options.map((option) => option.trim()), correctOption });
   }
-
-  const descricao = typeof body.descricao === 'string' && body.descricao.trim() ? body.descricao.trim() : null;
-  return { exam: { titulo, descricao, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), questions: normalized } };
+  return { questions: normalized };
 }
 
-/** Indica se a prova pode ser respondida agora. */
+/**
+ * Valida e normaliza o corpo de criação; devolve { error } ou { exam }.
+ * Com forManual (prova cadastrada junto com o manual), não há período: a prova começa no cadastro e não expira
+ * (endsAt null), ficando disponível até o colaborador fazer. Ela é liberada quando ele conclui 100% do manual;
+ * required diz se ele precisa fazê-la na hora ou pode deixar para depois. Datas enviadas são ignoradas.
+ */
+export function validateExamPayload(body = {}, { forManual = false } = {}) {
+  const titulo = typeof body.titulo === 'string' ? body.titulo.trim() : '';
+  const startsAt = forManual ? new Date() : new Date(body.startsAt);
+  const endsAt = forManual ? null : new Date(body.endsAt);
+  const questions = body.questions;
+
+  if (!titulo) return { error: 'Informe o título da prova' };
+  if (Number.isNaN(startsAt.getTime()) || (endsAt !== null && Number.isNaN(endsAt.getTime()))) {
+    return { error: 'Informe a data de início e a data final da prova' };
+  }
+  if (endsAt !== null && endsAt <= startsAt) return { error: 'A data final deve ser depois da data de início' };
+  const checked = validateQuestions(questions);
+  if (checked.error) return checked;
+  const normalized = checked.questions;
+
+  const descricao = cleanText(body.descricao);
+  const exam = { titulo, descricao, startsAt: startsAt.toISOString(), endsAt: endsAt ? endsAt.toISOString() : null, questions: normalized };
+  if (forManual) {
+    exam.required = body.required === true || body.required === 'true';
+    // Prova do manual montada a partir de um modelo: o controller confere se o modelo é do setor de quem cadastra.
+    exam.templateId = parseId(body.templateId);
+  }
+  return { exam };
+}
+
+/** Indica se a prova pode ser respondida agora. ends_at nulo (prova de manual sem prazo) não expira. */
 export function isExamOpen(exam, now = new Date()) {
-  return Boolean(exam?.active) && new Date(exam.starts_at) <= now && now <= new Date(exam.ends_at);
+  return Boolean(exam?.active) && new Date(exam.starts_at) <= now && (!exam.ends_at || now <= new Date(exam.ends_at));
+}
+
+/** Prova enviada junto com o cadastro do manual: chega como objeto (JSON) ou texto JSON (multipart). */
+export function parseManualExam(value) {
+  if (isEmpty(value)) return { exam: null };
+  let body = value;
+  if (typeof value === 'string') {
+    try { body = JSON.parse(value); } catch { return { error: 'Prova do manual inválida' }; }
+  }
+  if (!body || typeof body !== 'object') return { error: 'Prova do manual inválida' };
+  return validateExamPayload(body, { forManual: true });
 }
 
 /**
@@ -87,4 +125,29 @@ export function gradeSubmission(questions, answers = {}, { partial = false } = {
     objectiveTotal: questions.filter((question) => question.type !== QUESTION_TYPES.OPEN).length,
     objectiveCorrect: graded.filter((answer) => answer.correct).length
   };
+}
+
+/** Modelo de prova: título, descrição e perguntas (sem período). Devolve { error } ou { template }. */
+export function validateTemplatePayload(body = {}) {
+  const titulo = cleanText(body.titulo);
+  if (!titulo) return { error: 'Informe o título do modelo' };
+  const checked = validateQuestions(body.questions);
+  if (checked.error) return checked;
+  return { template: { titulo, descricao: cleanText(body.descricao), questions: checked.questions } };
+}
+
+/**
+ * Aplicação de um modelo: período obrigatório e o público. audience "colaboradores" exige ao menos um colaborador
+ * em userIds; "setor" vale para todo o setor do modelo. Devolve { error } ou { application }.
+ */
+export function validateApplyPayload(body = {}) {
+  const startsAt = new Date(body.startsAt);
+  const endsAt = new Date(body.endsAt);
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return { error: 'Informe a data de início e a data final da prova' };
+  if (endsAt <= startsAt) return { error: 'A data final deve ser depois da data de início' };
+  const audience = body.audience === 'setor' ? 'setor' : 'colaboradores';
+  const list = Array.isArray(body.userIds) ? body.userIds : [];
+  const userIds = [...new Set(list.map(parseId).filter(Boolean))];
+  if (audience === 'colaboradores' && !userIds.length) return { error: 'Escolha pelo menos um colaborador' };
+  return { application: { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), audience, userIds: audience === 'setor' ? [] : userIds } };
 }

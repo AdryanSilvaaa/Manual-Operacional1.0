@@ -4,6 +4,7 @@
  */
 import { query, withTransaction } from '../config/db.js';
 import { hasSector, seesAllSectors } from '../utils/access.js';
+import { insertExam } from './Exam.js';
 
 // Percentual do manual: média entre páginas lidas do PDF e vídeo assistido, contando só o que o manual tem
 // (um manual pode ter só PDF, só vídeo ou os dois).
@@ -18,13 +19,23 @@ const SECTOR_COLUMNS = `ARRAY(SELECT ms.sector_id FROM manual_sectors ms WHERE m
   ARRAY(SELECT s.nome FROM manual_sectors ms JOIN sectors s ON s.id = ms.sector_id
         WHERE ms.manual_id = m.id ORDER BY s.nome) AS sector_names`;
 
+// Prova do manual (no máximo uma, pelo índice único em exams.manual_id) e a entrega do usuário nela.
+// exam_status nulo = ainda não fez; exam_open diz se a prova está ativa e dentro do prazo.
+const examJoin = (userParam) => `LEFT JOIN LATERAL (
+    SELECT e.id AS exam_id, e.required AS exam_required,
+           (e.active AND NOW() >= e.starts_at AND (e.ends_at IS NULL OR NOW() <= e.ends_at)) AS exam_open,
+           (SELECT sb.status FROM exam_submissions sb WHERE sb.exam_id = e.id AND sb.user_id = ${userParam}) AS exam_status
+    FROM exams e WHERE e.manual_id = m.id) ex ON TRUE`;
+const EXAM_COLUMNS = 'ex.exam_id, ex.exam_required, ex.exam_open, ex.exam_status';
+
 export async function listManualsForUser(user, systemId = null) {
   if (seesAllSectors(user)) {
     const { rows } = await query(
       `SELECT m.*, u.nome AS criado_por_nome, mp.first_access_at, mp.completed_at,
-              ${PROGRESS_PERCENT}, ${SECTOR_COLUMNS}
+              ${PROGRESS_PERCENT}, ${SECTOR_COLUMNS}, ${EXAM_COLUMNS}
        FROM manuals m LEFT JOIN users u ON u.id = m.criado_por
        LEFT JOIN manual_progress mp ON mp.manual_id = m.id AND mp.user_id = $2
+       ${examJoin('$2')}
        WHERE ($1::int IS NULL OR m.system_id = $1) ORDER BY m.created_at DESC`,
       [systemId, user.id]
     );
@@ -33,9 +44,10 @@ export async function listManualsForUser(user, systemId = null) {
 
   const { rows } = await query(
     `SELECT m.*, u.nome AS criado_por_nome, mp.first_access_at, mp.completed_at,
-            ${PROGRESS_PERCENT}, ${SECTOR_COLUMNS}
+            ${PROGRESS_PERCENT}, ${SECTOR_COLUMNS}, ${EXAM_COLUMNS}
      FROM manuals m LEFT JOIN users u ON u.id = m.criado_por
      LEFT JOIN manual_progress mp ON mp.manual_id = m.id AND mp.user_id = $3
+     ${examJoin('$3')}
      WHERE ($2::int IS NULL OR m.system_id = $2) AND m.active = TRUE
        AND EXISTS (SELECT 1 FROM manual_sectors ms WHERE ms.manual_id = m.id AND ms.sector_id = ANY($1::int[]))
      ORDER BY m.created_at DESC`,
@@ -47,8 +59,8 @@ export async function listManualsForUser(user, systemId = null) {
 // Protege a abertura direta de um manual com a mesma regra de setores da listagem.
 export async function getManualForUser(id, user) {
   const { rows } = await query(
-    `SELECT m.*, u.nome AS criado_por_nome, ${SECTOR_COLUMNS} FROM manuals m
-     LEFT JOIN users u ON u.id = m.criado_por WHERE m.id = $1`, [id]
+    `SELECT m.*, u.nome AS criado_por_nome, ${SECTOR_COLUMNS}, ${EXAM_COLUMNS} FROM manuals m
+     LEFT JOIN users u ON u.id = m.criado_por ${examJoin('$2')} WHERE m.id = $1`, [id, user?.id || null]
   );
   const manual = rows[0];
   if (!manual || seesAllSectors(user)) return manual;
@@ -64,8 +76,8 @@ async function replaceManualSectors(execute, manualId, sectorIds) {
   );
 }
 
-// Cria o manual já ligado a um ou mais setores, na mesma transação.
-export async function createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, criadoPor }) {
+// Cria o manual já ligado a um ou mais setores e, se vier, a prova do manual, tudo na mesma transação.
+export async function createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, criadoPor, exam = null }) {
   return withTransaction(async (client) => {
     const execute = client.query.bind(client);
     const { rows } = await execute(
@@ -74,7 +86,8 @@ export async function createManual({ titulo, descricao, pdfUrl, videoUrl, system
       [titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds[0], criadoPor]
     );
     await replaceManualSectors(execute, rows[0].id, sectorIds);
-    return { ...rows[0], sector_ids: sectorIds };
+    const createdExam = exam ? await insertExam(execute, { ...exam, manualId: rows[0].id, criadoPor }) : null;
+    return { ...rows[0], sector_ids: sectorIds, exam_id: createdExam?.id || null, exam_required: createdExam?.required ?? null };
   });
 }
 

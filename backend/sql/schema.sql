@@ -16,6 +16,10 @@
 --   - Manual em vários setores: tabela manual_sectors (manuals.sector_id fica com o primeiro setor).
 --   - Prova bloqueada ao sair da página: exam_submissions.status (em_andamento, enviada, encerrada)
 --     e started_at; submitted_at fica nulo enquanto a prova está em andamento.
+--   - Prova do manual: exams.manual_id (uma prova por manual) e exams.required (obrigatória ou não);
+--     ends_at passa a aceitar nulo; prova de manual nunca expira (ends_at sempre nulo).
+--   - Modelos de prova: exam_templates e exam_template_questions (por setor), exams.template_id
+--     e exam_assignees (prova aplicada só a colaboradores escolhidos).
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS sectors (
@@ -156,7 +160,7 @@ CREATE TABLE IF NOT EXISTS user_sectors (
 );
 
 -- Provas por setor: gerente de setor cria para o próprio setor; suporte escolhe um setor ou todos.
--- sector_id NULL significa prova para todos os setores.
+-- sector_id NULL significa prova para todos os setores (ou, com manual_id, para os setores do manual).
 CREATE TABLE IF NOT EXISTS exams (
   id SERIAL PRIMARY KEY,
   titulo VARCHAR(180) NOT NULL CHECK (BTRIM(titulo) <> ''),
@@ -164,12 +168,31 @@ CREATE TABLE IF NOT EXISTS exams (
   sector_id INTEGER REFERENCES sectors(id) ON DELETE RESTRICT,
   criado_por INTEGER REFERENCES users(id) ON DELETE SET NULL,
   starts_at TIMESTAMPTZ NOT NULL,
-  ends_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (ends_at > starts_at)
 );
+
+-- Prova do manual: cadastrada junto com o manual e liberada quando o colaborador conclui 100% do conteúdo.
+-- required = TRUE: ele precisa fazer a prova assim que concluir; FALSE: a prova aparece e pode ser feita depois.
+-- Quem vê a prova são os setores do manual (manual_sectors), por isso sector_id fica nulo nela.
+-- Excluir o manual exclui a prova, as entregas e as respostas (mesmo comportamento do progresso).
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS manual_id INTEGER REFERENCES manuals(id) ON DELETE CASCADE;
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS required BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE exams ALTER COLUMN ends_at DROP NOT NULL;
+ALTER TABLE exams DROP CONSTRAINT IF EXISTS exams_manual_sector_check;
+ALTER TABLE exams ADD CONSTRAINT exams_manual_sector_check CHECK (manual_id IS NULL OR sector_id IS NULL);
+-- Prova avulsa tem prazo final; prova de manual nunca expira e fica disponível até o colaborador fazer.
+-- O UPDATE tira o prazo das provas de manual criadas antes desta regra.
+UPDATE exams SET ends_at = NULL WHERE manual_id IS NOT NULL AND ends_at IS NOT NULL;
+ALTER TABLE exams DROP CONSTRAINT IF EXISTS exams_ends_at_required_check;
+ALTER TABLE exams ADD CONSTRAINT exams_ends_at_required_check CHECK ((manual_id IS NULL) = (ends_at IS NOT NULL));
+-- required só faz sentido na prova de manual.
+ALTER TABLE exams DROP CONSTRAINT IF EXISTS exams_required_manual_check;
+ALTER TABLE exams ADD CONSTRAINT exams_required_manual_check CHECK (NOT required OR manual_id IS NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_exams_manual_id_unique ON exams(manual_id) WHERE manual_id IS NOT NULL;
 
 -- Até 10 perguntas por prova: múltipla escolha (alternativas A a D) ou resposta aberta.
 CREATE TABLE IF NOT EXISTS exam_questions (
@@ -207,6 +230,46 @@ ALTER TABLE exam_submissions ALTER COLUMN submitted_at DROP NOT NULL;
 ALTER TABLE exam_submissions DROP CONSTRAINT IF EXISTS exam_submissions_status_check;
 ALTER TABLE exam_submissions ADD CONSTRAINT exam_submissions_status_check
   CHECK (status IN ('em_andamento', 'enviada', 'encerrada'));
+
+-- Modelos de prova: perguntas guardadas para reaplicar (ex.: colaborador novo). Cada modelo pertence a um setor
+-- e só quem é desse setor o vê (suporte e editor de conteúdo veem todos). Ao aplicar, as perguntas são copiadas
+-- para exam_questions: editar ou excluir o modelo depois não altera provas e resultados já existentes.
+CREATE TABLE IF NOT EXISTS exam_templates (
+  id SERIAL PRIMARY KEY,
+  titulo VARCHAR(180) NOT NULL CHECK (BTRIM(titulo) <> ''),
+  descricao TEXT,
+  sector_id INTEGER NOT NULL REFERENCES sectors(id) ON DELETE RESTRICT,
+  criado_por INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Mesmas regras de exam_questions (até 10, múltipla escolha A a D ou aberta).
+CREATE TABLE IF NOT EXISTS exam_template_questions (
+  id SERIAL PRIMARY KEY,
+  template_id INTEGER NOT NULL REFERENCES exam_templates(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 9),
+  type VARCHAR(20) NOT NULL CHECK (type IN ('multipla_escolha', 'aberta')),
+  prompt TEXT NOT NULL CHECK (BTRIM(prompt) <> ''),
+  options JSONB,
+  correct_option INTEGER,
+  CHECK (
+    (type = 'multipla_escolha' AND jsonb_typeof(options) = 'array' AND jsonb_array_length(options) = 4
+      AND correct_option BETWEEN 0 AND 3)
+    OR (type = 'aberta' AND options IS NULL AND correct_option IS NULL)
+  ),
+  UNIQUE (template_id, position)
+);
+
+-- De qual modelo a prova saiu (nulo se foi criada do zero ou se o modelo foi excluído).
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS template_id INTEGER REFERENCES exam_templates(id) ON DELETE SET NULL;
+
+-- Prova aplicada a colaboradores específicos: com linhas aqui, só eles veem a prova; sem linhas, vale o setor.
+CREATE TABLE IF NOT EXISTS exam_assignees (
+  exam_id INTEGER NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (exam_id, user_id)
+);
 
 CREATE TABLE IF NOT EXISTS exam_answers (
   submission_id INTEGER NOT NULL REFERENCES exam_submissions(id) ON DELETE CASCADE,
@@ -269,6 +332,9 @@ CREATE INDEX IF NOT EXISTS idx_manual_progress_manual_id ON manual_progress(manu
 CREATE INDEX IF NOT EXISTS idx_manual_progress_completed_at ON manual_progress(completed_at);
 CREATE INDEX IF NOT EXISTS idx_exams_sector_period ON exams(sector_id, starts_at, ends_at);
 CREATE INDEX IF NOT EXISTS idx_exam_submissions_user_id ON exam_submissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_exam_templates_sector_id ON exam_templates(sector_id);
+CREATE INDEX IF NOT EXISTS idx_exam_assignees_user_id ON exam_assignees(user_id);
+CREATE INDEX IF NOT EXISTS idx_exams_template_id ON exams(template_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_manual_version_history_manual_id ON manual_version_history(manual_id);
 CREATE INDEX IF NOT EXISTS idx_progress_version_history_manual_id ON progress_version_history(manual_id);

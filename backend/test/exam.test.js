@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gradeSubmission, isExamOpen, validateExamPayload } from '../src/utils/exam.js';
+import { gradeSubmission, isExamOpen, parseManualExam, validateApplyPayload, validateExamPayload, validateTemplatePayload } from '../src/utils/exam.js';
 
 const multipleChoice = { type: 'multipla_escolha', prompt: 'Qual opção?', options: ['A', 'B', 'C', 'D'], correctOption: 2 };
 const open = { type: 'aberta', prompt: 'Explique o procedimento.' };
@@ -60,4 +60,56 @@ test('prova encerrada ao sair guarda só o que foi respondido e conta o resto co
   assert.equal(result.objectiveCorrect, 1);
   assert.deepEqual(result.answers.map((answer) => answer.questionId), [1]);
   assert.equal(gradeSubmission(questions, undefined, { partial: true }).answers.length, 0);
+});
+
+test('prova do manual: período opcional, sem prazo final e flag de obrigatória', () => {
+  const { error, exam } = parseManualExam(JSON.stringify({ titulo: 'Prova do manual', required: true, questions: [multipleChoice] }));
+  assert.equal(error, undefined);
+  assert.equal(exam.required, true);
+  assert.equal(exam.endsAt, null);
+  assert.ok(!Number.isNaN(new Date(exam.startsAt).getTime()));
+  assert.equal(parseManualExam({ titulo: 'Opcional', required: 'false', questions: [open] }).exam.required, false);
+});
+
+test('prova do manual: ausente, texto inválido e sem perguntas', () => {
+  assert.deepEqual(parseManualExam(undefined), { exam: null });
+  assert.deepEqual(parseManualExam(''), { exam: null });
+  assert.match(parseManualExam('{quebrado').error, /inválida/);
+  assert.match(parseManualExam({ titulo: 'Sem perguntas', questions: [] }).error, /ao menos uma pergunta/);
+});
+
+test('prova sem prazo final continua aberta depois de começar', () => {
+  const exam = { active: true, starts_at: '2026-01-01T00:00:00Z', ends_at: null };
+  assert.equal(isExamOpen(exam, new Date('2030-01-01T00:00:00Z')), true);
+  assert.equal(isExamOpen(exam, new Date('2025-12-31T00:00:00Z')), false);
+});
+
+test('prova avulsa continua exigindo início e fim', () => {
+  assert.match(validateExamPayload({ titulo: 'Avulsa', questions: [open] }).error, /data de início/);
+});
+
+
+test('prova do manual: nunca tem prazo, mesmo se vier data final', () => {
+  const soon = new Date(Date.now() + 20 * 1000).toISOString();
+  const { error, exam } = parseManualExam({ titulo: 'Sem prazo', questions: [open], startsAt: '2020-01-01T00:00:00Z', endsAt: soon });
+  assert.equal(error, undefined);
+  assert.equal(exam.endsAt, null);
+  assert.ok(new Date(exam.startsAt) > new Date('2025-01-01T00:00:00Z'));
+});
+
+test('modelo de prova: exige título e perguntas válidas, sem período', () => {
+  assert.match(validateTemplatePayload({ questions: [open] }).error, /título do modelo/);
+  assert.match(validateTemplatePayload({ titulo: 'Modelo', questions: [] }).error, /ao menos uma pergunta/);
+  const { template } = validateTemplatePayload({ titulo: ' Integração ', questions: [multipleChoice, open] });
+  assert.equal(template.titulo, 'Integração');
+  assert.equal(template.questions.length, 2);
+});
+
+test('aplicar modelo: colaboradores específicos exigem ao menos um; setor ignora a lista', () => {
+  const period = { startsAt: base.startsAt, endsAt: base.endsAt };
+  assert.match(validateApplyPayload({ ...period, audience: 'colaboradores', userIds: [] }).error, /pelo menos um colaborador/);
+  assert.deepEqual(validateApplyPayload({ ...period, userIds: ['3', 3, 'x', 5] }).application.userIds, [3, 5]);
+  assert.deepEqual(validateApplyPayload({ ...period, audience: 'setor', userIds: [3] }).application.userIds, []);
+  assert.match(validateApplyPayload({ audience: 'setor' }).error, /data de início/);
+  assert.match(validateApplyPayload({ ...period, endsAt: base.startsAt, audience: 'setor' }).error, /data final/);
 });

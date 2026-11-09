@@ -299,6 +299,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .manual-progress-panel,
+.manual-exam-panel,
 .manual-complete {
   display: flex;
   margin-top: 14px;
@@ -312,13 +313,14 @@
 }
 
 .manual-progress-panel > div,
+.manual-exam-panel > div,
 .manual-complete {
   color: var(--color-navy);
   align-items: center;
   gap: 9px;
 }
 
-.manual-progress-panel > div { display: flex; }
+.manual-progress-panel > div, .manual-exam-panel > div { display: flex; }
 .manual-progress-panel strong { color: var(--color-success); }
 .manual-complete { color: var(--color-success); font-weight: 800; justify-content: center; }
 
@@ -683,3 +685,20 @@ fieldset > .secondary-button { display: inline-flex; align-items: center; gap: 6
   .color-field .secondary-button { grid-column: 1 / -1; justify-self: start; }
   .logo-grid { grid-template-columns: 1fr; }
 }
+
+/* Prova do manual: opções no cadastro, painel no visualizador e indicação no card. */
+.manual-exam-options { display: grid; gap: 12px; }
+.checkbox-line { display: flex; flex-direction: row; align-items: center; gap: 8px; font-weight: 600; }
+.checkbox-line input { width: auto; min-height: auto; }
+.exam-mode { display: grid; gap: 8px; }
+.exam-mode .quiz-option { padding: 12px; background: #f7f9ff; border-radius: 10px; }
+.manual-exam-panel { flex-wrap: wrap; }
+.manual-exam-panel strong { color: var(--color-navy); }
+.manual-exam-panel .hint { flex: 1 1 100%; }
+.exam-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.card-exam { display: block; margin-top: 8px; color: var(--color-navy); font-weight: 700; }
+
+/* Modelos de prova */
+.template-card { cursor: default; }
+.template-actions { display: flex; flex-wrap: wrap; margin-top: 12px; gap: 8px; }
+.template-actions button { display: inline-flex; align-items: center; gap: 6px; }

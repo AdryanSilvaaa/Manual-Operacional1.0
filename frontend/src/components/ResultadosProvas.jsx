@@ -20,9 +20,14 @@ function percent(correct, total) {
 function examStatus(exam) {
   const now = new Date();
   if (now < new Date(exam.starts_at)) return 'Agendada';
-  if (now > new Date(exam.ends_at)) return 'Encerrada';
+  if (exam.ends_at && now > new Date(exam.ends_at)) return 'Encerrada';
   return 'Em andamento';
 }
+
+// Prova de manual pode não ter prazo final.
+const examPeriod = (exam) => (exam.ends_at ? `${formatDateTime(exam.starts_at)} a ${formatDateTime(exam.ends_at)}` : `Desde ${formatDateTime(exam.starts_at)}, sem prazo final`);
+// Prova de manual vale para os setores do manual (sector_names); a avulsa tem um setor ou "Todos os setores".
+const examSectors = (exam) => exam.sector_names || [exam.sector_name];
 
 // Situação da entrega: em andamento só enquanto a pessoa ainda está com a prova aberta e o período não acabou.
 const SUBMISSION_LABELS = { enviada: 'Enviada', encerrada: 'Encerrada ao sair da página', em_andamento: 'Em andamento' };
@@ -39,7 +44,7 @@ function exportAnswers(exams) {
   const columns = ['Prova', 'Setor', 'Período', 'Status', 'Colaborador', 'Situação da entrega', 'Entregue em', 'Acertos', 'Nota', 'Nº', 'Pergunta', 'Tipo', 'Resposta', 'Resposta correta', 'Resultado'];
   const rows = [];
   for (const exam of exams) {
-    const period = `${formatDateTime(exam.starts_at)} a ${formatDateTime(exam.ends_at)}`;
+    const period = examPeriod(exam);
     for (const submission of exam.submissions.filter(isFinished)) {
       const hits = submission.objective_total ? `${submission.objective_correct} de ${submission.objective_total}` : '—';
       exam.questions.forEach((question, index) => {
@@ -93,10 +98,10 @@ export default function ResultadosProvas() {
   if (!exams) return <p className="empty-state">Carregando resultados...</p>;
   if (!exams.length) return <p className="empty-state">Nenhuma prova criada ainda.</p>;
 
-  const scope = sectorScope(user, exams.map((exam) => exam.sector_name).filter((name) => name !== ALL_SECTORS));
+  const scope = sectorScope(user, [...new Set(exams.flatMap(examSectors))].filter((name) => name !== ALL_SECTORS));
   const sector = scope.locked || sectorFilter;
   // Provas para todos os setores também valem para o setor escolhido.
-  const filtered = exams.filter((exam) => !sector || exam.sector_name === sector || exam.sector_name === ALL_SECTORS);
+  const filtered = exams.filter((exam) => !sector || examSectors(exam).includes(sector) || exam.sector_name === ALL_SECTORS);
 
   return <>
     <div className="dashboard-filters">
@@ -113,7 +118,9 @@ export default function ResultadosProvas() {
         <h2>{exam.titulo}</h2>
         <p className="exam-summary">
           <span>{exam.sector_name}</span>
-          <span>{formatDateTime(exam.starts_at)} a {formatDateTime(exam.ends_at)} · {examStatus(exam)}</span>
+          {exam.manual_id && <span>Manual {exam.manual_titulo} · {exam.required ? 'Obrigatória' : 'Não obrigatória'}</span>}
+          {exam.assignee_names?.length > 0 && <span>Aplicada para: {exam.assignee_names.join(', ')}</span>}
+          <span>{examPeriod(exam)} · {examStatus(exam)}</span>
           <span>{finished.length} de {exam.collaborators} colaboradores responderam</span>
           {average !== null && <span>Média: {average}%</span>}
         </p>

@@ -1,11 +1,14 @@
 /**
  * Busca e exibe o PDF e/ou o vídeo de um manual pelo ID da URL (o manual pode ter só um dos dois).
  * Altere os players aqui; dimensões do PDF/vídeo ficam em styles/pages.css.
+ * Prova do manual (exam_id): liberada ao concluir 100% do conteúdo. Obrigatória abre um aviso que só sai iniciando a prova;
+ * não obrigatória abre um aviso com "Fazer depois" e fica disponível no menu Provas.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, FileCheck2, PlaySquare } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { CheckCircle2, ClipboardCheck, FileCheck2, PlaySquare } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { ROLES } from '../constants/roles.js';
 import BackButton from './BackButton.jsx';
 import PdfReader from './PdfReader.jsx';
 
@@ -19,8 +22,10 @@ function resolveUrl(apiUrl, url) {
 
 export default function ManualViewer() {
   const { id } = useParams();
-  const { apiUrl, token } = useAuth();
+  const { apiUrl, token, user } = useAuth();
+  const navigate = useNavigate();
   const [manual, setManual] = useState(null);
+  const [examDeferred, setExamDeferred] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState({ pdf_completed: false, video_progress: 0 });
   const lastVideoProgress = useRef(0);
@@ -96,6 +101,14 @@ export default function ManualViewer() {
     return <div className="center-screen">Carregando manual...</div>;
   }
 
+  // Só o colaborador faz provas; exam_status preenchido = já fez (ou já começou) a prova.
+  const hasExam = Boolean(manual.exam_id) && user?.role === ROLES.USER;
+  const examPending = hasExam && manual.exam_open && !manual.exam_status;
+  const examUnlocked = examPending && Boolean(progress.completed_at);
+  const examLabel = manual.exam_required ? 'Prova obrigatória' : 'Prova não obrigatória';
+  const showExamModal = examUnlocked && (manual.exam_required || !examDeferred);
+  const startExam = () => navigate(`/provas/${manual.exam_id}`);
+
   return (
     <section className="viewer-page">
       <BackButton fallback="/sistemas" />
@@ -132,6 +145,32 @@ export default function ManualViewer() {
         <div className="video-progress"><span>Progresso do vídeo</span><div><i style={{ width: `${Math.min(100, Number(progress.video_progress) || 0)}%` }} /></div><strong>{Math.round(Number(progress.video_progress) || 0)}%</strong></div>
       </div>}
       {progress.completed_at && <p className="manual-complete"><CheckCircle2 size={20} /> Manual concluído</p>}
+
+      {manual.exam_id && !hasExam && <div className="manual-exam-panel">
+        <div><ClipboardCheck size={20} /><span>{examLabel}</span><strong>Somente colaboradores</strong></div>
+        <span className="hint">Este manual tem prova. Ela é liberada ao colaborador (perfil usuário) quando ele conclui 100% do conteúdo; seu perfil não faz provas.</span>
+      </div>}
+
+      {hasExam && <div className="manual-exam-panel">
+        <div><ClipboardCheck size={20} /><span>{examLabel}</span><strong>{manual.exam_status ? 'Realizada' : examUnlocked ? 'Liberada' : manual.exam_open ? 'Bloqueada' : 'Indisponível'}</strong></div>
+        {examPending && !examUnlocked && <span className="hint">A prova é liberada quando você concluir 100% do conteúdo deste manual.</span>}
+        {examUnlocked && <button type="button" className="primary-button" onClick={startExam}><ClipboardCheck size={18} /> Fazer a prova</button>}
+        {hasExam && !manual.exam_status && !manual.exam_open && <span className="hint">A prova deste manual foi desativada.</span>}
+      </div>}
+
+      {showExamModal && <div className="modal-backdrop" role="presentation">
+        <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="prova-manual-titulo">
+          <div className="manual-logo"><ClipboardCheck size={28} /></div>
+          <h2 id="prova-manual-titulo">{manual.exam_required ? 'Você concluiu o conteúdo. Agora faça a prova obrigatória.' : 'Você concluiu o conteúdo. Deseja fazer a prova agora?'}</h2>
+          <p>{manual.exam_required
+            ? 'Esta prova é obrigatória e precisa ser feita agora para concluir o treinamento.'
+            : 'Se preferir, faça depois pelo menu Provas.'}</p>
+          <div className="modal-actions">
+            {!manual.exam_required && <button type="button" className="secondary-button" onClick={() => setExamDeferred(true)}>Fazer depois</button>}
+            <button type="button" className="primary-button" onClick={startExam}>{manual.exam_required ? 'Iniciar prova' : 'Fazer agora'}</button>
+          </div>
+        </div>
+      </div>}
     </section>
   );
 }

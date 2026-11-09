@@ -18,6 +18,7 @@ const CadastroSistemas = lazy(() => import('./pages/CadastroSistemas.jsx'));
 const CriarManual = lazy(() => import('./pages/CriarManual.jsx'));
 const GerenciarManuais = lazy(() => import('./pages/GerenciarManuais.jsx'));
 const CriarProva = lazy(() => import('./pages/CriarProva.jsx'));
+const ModelosProva = lazy(() => import('./pages/ModelosProva.jsx'));
 const Manuais = lazy(() => import('./pages/Manuais.jsx'));
 const Setores = lazy(() => import('./pages/Setores.jsx'));
 const Sistemas = lazy(() => import('./pages/Sistemas.jsx'));
@@ -51,6 +52,7 @@ export default function AppRoutes() {
         <Route path="configuracoes/manuais" element={<PrivatePage roles={ADMIN_ROLES}><CriarManual /></PrivatePage>} />
         <Route path="configuracoes/gerenciar-manuais" element={<PrivatePage roles={ADMIN_ROLES}><GerenciarManuais /></PrivatePage>} />
         <Route path="configuracoes/provas" element={<PrivatePage roles={ADMIN_ROLES}><CriarProva /></PrivatePage>} />
+        <Route path="configuracoes/modelos-prova" element={<PrivatePage roles={ADMIN_ROLES}><ModelosProva /></PrivatePage>} />
         <Route path="provas" element={<PrivatePage roles={[ROLES.USER]}><Provas /></PrivatePage>} />
         <Route path="provas/:id" element={<PrivatePage roles={[ROLES.USER]}><RealizarProva /></PrivatePage>} />
         <Route path="configuracoes/painel-uso" element={<PrivatePage roles={ADMIN_ROLES}><PainelUso /></PrivatePage>} />
