@@ -4,6 +4,7 @@
  */
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import {
+  countSectorCollaborators,
   createExam,
   findExamById,
   findSubmission,
@@ -13,6 +14,7 @@ import {
   listAvailableExams,
   listExamQuestions,
   listExamResults,
+  listSectorCollaborators,
   startSubmission
 } from '../models/Exam.js';
 import { findSectorById } from '../models/Sector.js';
@@ -64,9 +66,26 @@ export async function store(req, res) {
   if (templateId && !canUseTemplate(req.user, await getTemplate(templateId))) {
     return res.status(400).json({ message: 'Modelo de prova não encontrado ou sem permissão' });
   }
-  const data = { ...exam, sectorId: sector.sectorId, criadoPor: req.user.id, templateId };
+  // Para colaboradores específicos (ex.: quem acabou de entrar): só vale com um setor escolhido e só para quem é dele.
+  const { userIds, ...fields } = exam;
+  if (userIds.length) {
+    if (!sector.sectorId) return res.status(400).json({ message: 'Para escolher colaboradores, escolha um setor' });
+    const valid = await withDemo(() => countSectorCollaborators(sector.sectorId, userIds), () => null);
+    if (valid === null) return res.status(400).json({ message: 'O modo demonstração não permite escolher colaboradores' });
+    if (valid !== userIds.length) return res.status(400).json({ message: 'Escolha apenas colaboradores do setor da prova' });
+  }
+  const data = { ...fields, sectorId: sector.sectorId, criadoPor: req.user.id, templateId, assigneeIds: userIds };
   const created = await withDemo(() => createExam(data), () => demoStore.createExam(data));
   res.status(201).json(created);
+}
+
+/** Colaboradores de um setor que podem receber a prova (Criar Prova > Para quem). Gerente só consulta os seus setores. */
+export async function collaborators(req, res) {
+  const sectorId = parseId(req.query.sectorId);
+  if (!sectorId || (!seesAllSectors(req.user) && !hasSector(req.user, sectorId))) {
+    return res.status(404).json({ message: 'Setor não encontrado ou sem permissão' });
+  }
+  res.json(await withDemo(() => listSectorCollaborators(sectorId), () => []));
 }
 
 // Só colaboradores (perfil usuario) recebem provas para responder.

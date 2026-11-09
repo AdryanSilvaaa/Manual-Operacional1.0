@@ -72,6 +72,11 @@ export function validateExamPayload(body = {}, { forManual = false } = {}) {
 
   const descricao = cleanText(body.descricao);
   const exam = { titulo, descricao, startsAt: startsAt.toISOString(), endsAt: endsAt ? endsAt.toISOString() : null, questions: normalized };
+  if (!forManual) {
+    const audience = parseAudience(body);
+    if (audience.error) return audience;
+    exam.userIds = audience.userIds;
+  }
   if (forManual) {
     exam.required = body.required === true || body.required === 'true';
     // Prova do manual montada a partir de um modelo: o controller confere se o modelo é do setor de quem cadastra.
@@ -137,17 +142,12 @@ export function validateTemplatePayload(body = {}) {
 }
 
 /**
- * Aplicação de um modelo: período obrigatório e o público. audience "colaboradores" exige ao menos um colaborador
- * em userIds; "setor" vale para todo o setor do modelo. Devolve { error } ou { application }.
+ * Para quem vai a prova avulsa: audience "colaboradores" exige ao menos um colaborador em userIds;
+ * "setor" (padrão) vale para todo o setor escolhido. Devolve { error } ou { userIds } (vazio = setor todo).
  */
-export function validateApplyPayload(body = {}) {
-  const startsAt = new Date(body.startsAt);
-  const endsAt = new Date(body.endsAt);
-  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return { error: 'Informe a data de início e a data final da prova' };
-  if (endsAt <= startsAt) return { error: 'A data final deve ser depois da data de início' };
-  const audience = body.audience === 'setor' ? 'setor' : 'colaboradores';
+export function parseAudience(body = {}) {
+  if (body.audience !== 'colaboradores') return { userIds: [] };
   const list = Array.isArray(body.userIds) ? body.userIds : [];
   const userIds = [...new Set(list.map(parseId).filter(Boolean))];
-  if (audience === 'colaboradores' && !userIds.length) return { error: 'Escolha pelo menos um colaborador' };
-  return { application: { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), audience, userIds: audience === 'setor' ? [] : userIds } };
+  return userIds.length ? { userIds } : { error: 'Escolha pelo menos um colaborador' };
 }

@@ -1,22 +1,13 @@
 /**
- * Modelos de prova: cadastro por setor e aplicação a colaboradores específicos ou ao setor inteiro.
- * Gerente de setor só vê, altera e aplica modelos dos seus setores, e só para colaboradores desses setores.
+ * Modelos de prova: cadastro por setor. Gerente de setor só vê e altera modelos dos seus setores.
+ * Aplicar é sempre pela tela Criar Prova (POST /api/exams com templateId), que copia as perguntas.
  * Validação em utils/exam.js; SQL em models/ExamTemplate.js. Sem modo demonstração: exige PostgreSQL.
  */
-import {
-  applyTemplate,
-  countSectorCollaborators,
-  createTemplate,
-  deleteTemplate,
-  getTemplate,
-  listSectorCollaborators,
-  listTemplates,
-  updateTemplate
-} from '../models/ExamTemplate.js';
+import { createTemplate, deleteTemplate, getTemplate, listTemplates, updateTemplate } from '../models/ExamTemplate.js';
 import { findSectorById } from '../models/Sector.js';
 import { audit } from '../models/Audit.js';
 import { hasSector, seesAllSectors } from '../utils/access.js';
-import { parseId, validateApplyPayload, validateTemplatePayload } from '../utils/exam.js';
+import { parseId, validateTemplatePayload } from '../utils/exam.js';
 
 /** O modelo é visível para quem é do setor dele (suporte e editor de conteúdo veem todos). */
 export function canUseTemplate(user, template) {
@@ -85,28 +76,4 @@ export async function destroy(req, res) {
   await deleteTemplate(template.id);
   await auditTemplate(req, 'exam_template_deleted', template);
   res.status(204).send();
-}
-
-// Colaboradores que podem receber a prova deste modelo (os do setor do modelo).
-export async function collaborators(req, res) {
-  const template = await loadTemplate(req, res);
-  if (template) res.json(await listSectorCollaborators(template.sector_id));
-}
-
-/** Aplica o modelo: cria uma prova nova com cópia das perguntas para os colaboradores escolhidos ou o setor todo. */
-export async function apply(req, res) {
-  const template = await loadTemplate(req, res);
-  if (!template) return;
-  const { error, application } = validateApplyPayload(req.body);
-  if (error) return res.status(400).json({ message: error });
-  if (!template.questions.length) return res.status(400).json({ message: 'O modelo não tem perguntas' });
-  if (application.userIds.length) {
-    const valid = await countSectorCollaborators(template.sector_id, application.userIds);
-    if (valid !== application.userIds.length) {
-      return res.status(400).json({ message: `Escolha apenas colaboradores do setor ${template.sector_name}` });
-    }
-  }
-  const exam = await applyTemplate(template, { ...application, criadoPor: req.user.id });
-  await auditTemplate(req, 'exam_template_applied', template, { examId: exam.id, audience: application.audience, userIds: application.userIds });
-  res.status(201).json(exam);
 }

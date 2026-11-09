@@ -48,6 +48,28 @@ export async function insertQuestions(execute, table, ownerColumn, ownerId, ques
   }
 }
 
+/** Colaboradores (perfil usuário) do setor: são os que podem receber uma prova avulsa. */
+export async function listSectorCollaborators(sectorId) {
+  const { rows } = await query(
+    `SELECT u.id, u.nome, u.identificador FROM users u
+     WHERE u.role = 'usuario' AND EXISTS (SELECT 1 FROM user_sectors us WHERE us.user_id = u.id AND us.sector_id = $1)
+     ORDER BY u.nome`,
+    [sectorId]
+  );
+  return rows;
+}
+
+/** Quantos dos ids informados são colaboradores do setor (para recusar quem é de fora). */
+export async function countSectorCollaborators(sectorId, userIds) {
+  const { rows } = await query(
+    `SELECT COUNT(*)::int AS total FROM users u
+     WHERE u.id = ANY($2::int[]) AND u.role = 'usuario'
+       AND EXISTS (SELECT 1 FROM user_sectors us WHERE us.user_id = u.id AND us.sector_id = $1)`,
+    [sectorId, userIds]
+  );
+  return rows[0].total;
+}
+
 /** Grava a prova e suas perguntas na mesma transação. */
 export async function createExam(data) {
   return withTransaction((client) => insertExam(client.query.bind(client), data));

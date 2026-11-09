@@ -1,10 +1,10 @@
 /**
  * Consultas PostgreSQL dos modelos de prova (exam_templates e exam_template_questions).
  * Regra de acesso: o modelo é do setor de quem o criou; gerente de setor vê só os dos seus setores,
- * suporte e editor de conteúdo veem todos. Aplicar copia as perguntas para uma prova nova (models/Exam.js).
+ * suporte e editor de conteúdo veem todos. Para aplicar, a tela Criar Prova copia as perguntas para uma prova nova.
  */
 import { query, withTransaction } from '../config/db.js';
-import { insertExam, insertQuestions } from './Exam.js';
+import { insertQuestions } from './Exam.js';
 
 const TEMPLATE_COLUMNS = `t.id, t.titulo, t.descricao, t.sector_id, s.nome AS sector_name, t.criado_por, u.nome AS criado_por_nome,
   t.created_at, t.updated_at,
@@ -65,47 +65,4 @@ export async function updateTemplate(id, { titulo, descricao, questions }) {
 /** Excluir o modelo não apaga as provas aplicadas: exams.template_id fica nulo (ON DELETE SET NULL). */
 export async function deleteTemplate(id) {
   await query('DELETE FROM exam_templates WHERE id = $1', [id]);
-}
-
-/** Colaboradores (perfil usuário) do setor do modelo: são os que podem receber a prova. */
-export async function listSectorCollaborators(sectorId) {
-  const { rows } = await query(
-    `SELECT u.id, u.nome, u.identificador FROM users u
-     WHERE u.role = 'usuario' AND EXISTS (SELECT 1 FROM user_sectors us WHERE us.user_id = u.id AND us.sector_id = $1)
-     ORDER BY u.nome`,
-    [sectorId]
-  );
-  return rows;
-}
-
-/** Quantos dos ids informados são colaboradores do setor (para recusar quem é de fora). */
-export async function countSectorCollaborators(sectorId, userIds) {
-  const { rows } = await query(
-    `SELECT COUNT(*)::int AS total FROM users u
-     WHERE u.id = ANY($2::int[]) AND u.role = 'usuario'
-       AND EXISTS (SELECT 1 FROM user_sectors us WHERE us.user_id = u.id AND us.sector_id = $1)`,
-    [sectorId, userIds]
-  );
-  return rows[0].total;
-}
-
-/**
- * Cria a prova a partir do modelo, na mesma transação: copia título, descrição e perguntas, usa o setor do modelo
- * e grava os colaboradores escolhidos (lista vazia = todo o setor).
- */
-export async function applyTemplate(template, { startsAt, endsAt, userIds, criadoPor }) {
-  const questions = template.questions.map((question) => ({
-    type: question.type, prompt: question.prompt, options: question.options, correctOption: question.correct_option
-  }));
-  return withTransaction((client) => insertExam(client.query.bind(client), {
-    titulo: template.titulo,
-    descricao: template.descricao,
-    sectorId: template.sector_id,
-    criadoPor,
-    startsAt,
-    endsAt,
-    questions,
-    templateId: template.id,
-    assigneeIds: userIds
-  }));
 }

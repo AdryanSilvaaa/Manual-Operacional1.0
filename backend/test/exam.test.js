@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gradeSubmission, isExamOpen, parseManualExam, validateApplyPayload, validateExamPayload, validateTemplatePayload } from '../src/utils/exam.js';
+import { gradeSubmission, isExamOpen, parseManualExam, parseAudience, validateExamPayload, validateTemplatePayload } from '../src/utils/exam.js';
 
 const multipleChoice = { type: 'multipla_escolha', prompt: 'Qual opção?', options: ['A', 'B', 'C', 'D'], correctOption: 2 };
 const open = { type: 'aberta', prompt: 'Explique o procedimento.' };
@@ -105,11 +105,12 @@ test('modelo de prova: exige título e perguntas válidas, sem período', () => 
   assert.equal(template.questions.length, 2);
 });
 
-test('aplicar modelo: colaboradores específicos exigem ao menos um; setor ignora a lista', () => {
-  const period = { startsAt: base.startsAt, endsAt: base.endsAt };
-  assert.match(validateApplyPayload({ ...period, audience: 'colaboradores', userIds: [] }).error, /pelo menos um colaborador/);
-  assert.deepEqual(validateApplyPayload({ ...period, userIds: ['3', 3, 'x', 5] }).application.userIds, [3, 5]);
-  assert.deepEqual(validateApplyPayload({ ...period, audience: 'setor', userIds: [3] }).application.userIds, []);
-  assert.match(validateApplyPayload({ audience: 'setor' }).error, /data de início/);
-  assert.match(validateApplyPayload({ ...period, endsAt: base.startsAt, audience: 'setor' }).error, /data final/);
+test('para quem: colaboradores específicos exigem ao menos um; setor (padrão) ignora a lista', () => {
+  assert.match(parseAudience({ audience: 'colaboradores', userIds: [] }).error, /pelo menos um colaborador/);
+  assert.deepEqual(parseAudience({ audience: 'colaboradores', userIds: ['3', 3, 'x', 5] }).userIds, [3, 5]);
+  assert.deepEqual(parseAudience({ audience: 'setor', userIds: [3] }).userIds, []);
+  assert.deepEqual(parseAudience({ userIds: [3] }).userIds, []);
+  assert.match(validateExamPayload({ ...base, questions: [open], audience: 'colaboradores' }).error, /pelo menos um colaborador/);
+  assert.deepEqual(validateExamPayload({ ...base, questions: [open], audience: 'colaboradores', userIds: [7] }).exam.userIds, [7]);
+  assert.equal(validateExamPayload({ ...base, questions: [open], required: true }, { forManual: true }).exam.userIds, undefined);
 });
