@@ -3,7 +3,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800&display=swap');
 
 :root {
-  /* As cores abaixo marcadas com (Aparência) podem ser trocadas pelo suporte em Configurações > Aparência;
+  /* As cores abaixo marcadas com (Aparência) podem ser trocadas pelo admin em Configurações > Aparência;
      a tela grava a escolha no banco e sobrescreve estes valores padrão ao carregar o site. */
   /* Cor de botões principais, ícones de destaque e detalhes da marca. (Aparência) */
   --color-primary: #cc3399;

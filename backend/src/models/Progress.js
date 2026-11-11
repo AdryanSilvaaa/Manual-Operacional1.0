@@ -1,5 +1,12 @@
+/**
+ * Progresso de leitura (manual_progress): páginas do PDF vistas, % do vídeo, tempo de uso e conclusão,
+ * e o relatório do Painel de uso. As consultas respeitam setores e unidades de quem pede (utils/access.js).
+ */
 import { query } from '../config/db.js';
+import { seesAllSectors, seesAllUnits } from '../utils/access.js';
+import { manualInUnits, manualInUserUnits, userInUnits } from '../utils/unitSql.js';
 
+// Progresso de um colaborador em um manual (null se ainda não abriu).
 export async function getProgress(userId, manualId) {
   const { rows } = await query(
     `SELECT user_id, manual_id, pdf_completed, video_progress, completed_at,
@@ -11,7 +18,10 @@ export async function getProgress(userId, manualId) {
 }
 
 // hasPdf/hasVideo dizem o que o manual tem: a conclusão exige só as partes existentes (PDF lido e/ou 90% do vídeo).
-export async function saveProgress({ userId, manualId, pdfCompleted, videoProgress, seconds, page, pageCount, hasPdf = true, hasVideo = true }) {
+// O PDF só conta como lido quando todas as páginas foram vistas (pages_viewed). O navegador não pode mais
+// mandar "pdf concluído" direto: antes bastava abrir a última página (ou uma chamada manual à API) para concluir.
+// Os valores enviados são limitados (vídeo 0-100%, no máximo 60 s por envio) e nunca diminuem o que já foi salvo.
+export async function saveProgress({ userId, manualId, videoProgress, seconds, page, pageCount, hasPdf = true, hasVideo = true }) {
   const safeVideoProgress = Math.max(0, Math.min(100, Number(videoProgress) || 0));
   const safeSeconds = Math.max(0, Math.min(60, Number(seconds) || 0));
   const safePageCount = Math.max(0, Number(pageCount) || 0);
@@ -42,26 +52,32 @@ export async function saveProgress({ userId, manualId, pdfCompleted, videoProgre
        END
      RETURNING user_id, manual_id, pdf_completed, video_progress, completed_at,
                first_access_at, last_access_at, total_seconds, page_count, last_page, pages_viewed`,
-    [userId, manualId, Boolean(pdfCompleted), safeVideoProgress, safeSeconds, safePageCount, safePage, Boolean(hasPdf), Boolean(hasVideo)]
+    [userId, manualId, false, safeVideoProgress, safeSeconds, safePageCount, safePage, Boolean(hasPdf), Boolean(hasVideo)]
   );
   return rows[0];
 }
 
 // Uma linha por pessoa (qualquer perfil) e manual: os manuais dos setores dela, inclusive não iniciados,
-// mais os que ela abriu fora deles (o suporte, que não tem setor, entra pelos manuais que leu).
-// Gerente de setor vê só quem é dos próprios setores, nos manuais desses setores.
+// mais os que ela abriu fora deles (o admin, que não tem setor, entra pelos manuais que leu).
+// Gerente de setor e gestor de área veem só quem é dos próprios setores, nos manuais desses setores.
 // sector_names: setores do manual pelos quais a pessoa o recebe (ou todos os do manual, se ela o abriu por fora).
+// Unidades: a pessoa só recebe o manual se ele for da unidade dela (ou de todas). Quem não vê todas as unidades
+// (gerente de setor, gestor de área) vê só pessoas das suas unidades, em manuais que alcançam essas unidades.
 export async function getReport(user) {
-  const sectorFilter = user.role === 'gerente_setor' ? user.sector_ids : null;
+  const sectorFilter = seesAllSectors(user) ? null : user.sector_ids || [];
+  const unitFilter = seesAllUnits(user) ? null : user.unit_ids || [];
   const { rows } = await query(
     `WITH pairs AS (
        SELECT us.user_id, ms.manual_id
        FROM user_sectors us JOIN manual_sectors ms ON ms.sector_id = us.sector_id
+       WHERE ${manualInUserUnits('us.user_id', 'ms.manual_id')}
        UNION
        SELECT user_id, manual_id FROM manual_progress
      )
      SELECT u.id AS user_id, u.nome AS user_name, u.role AS user_role,
             sn.names AS sector_names, array_to_string(sn.names, ', ') AS sector_name,
+            ARRAY(SELECT un.nome FROM user_units uu JOIN units un ON un.id = uu.unit_id
+                  WHERE uu.user_id = u.id ORDER BY un.nome) AS unit_names,
             m.id AS manual_id, m.titulo AS manual_title,
             COALESCE(mp.pdf_completed, false) AS pdf_completed,
             COALESCE(mp.video_progress, 0)::float AS video_progress,
@@ -84,12 +100,13 @@ export async function getReport(user) {
              WHERE ms.manual_id = m.id ORDER BY s.nome)
      ) AS names) sn
      LEFT JOIN manual_progress mp ON mp.user_id = u.id AND mp.manual_id = m.id
-     WHERE $1::int[] IS NULL OR EXISTS (
+     WHERE ($1::int[] IS NULL OR EXISTS (
        SELECT 1 FROM manual_sectors ms JOIN user_sectors x ON x.sector_id = ms.sector_id
        WHERE ms.manual_id = m.id AND x.user_id = u.id AND ms.sector_id = ANY($1::int[])
-     )
+     ))
+       AND ($2::int[] IS NULL OR (${userInUnits('u.id', '$2')} AND ${manualInUnits('$2')}))
      ORDER BY m.titulo, u.nome`,
-    [sectorFilter]
+    [sectorFilter, unitFilter]
   );
   return rows;
 }

@@ -1,3 +1,7 @@
+/**
+ * Painel de uso: quem leu/concluiu cada manual (com filtros e exportação CSV) e a aba de resultados de provas.
+ * Os dados vêm de /api/progress/report, já filtrados no backend pelos setores e unidades de quem consulta.
+ */
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3, Download, UsersRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -7,7 +11,8 @@ import SearchSelect from '../components/SearchSelect.jsx';
 import BackButton from '../components/BackButton.jsx';
 import ResultadosProvas from '../components/ResultadosProvas.jsx';
 import { sectorScope } from '../utils/sectorScope.js';
-import { ROLE_LABELS } from '../constants/roles.js';
+import { downloadCsv } from '../utils/csv.js';
+import { roleLabel } from '../constants/roles.js';
 
 const TABS = [{ id: 'uso', label: 'Uso dos manuais' }, { id: 'provas', label: 'Resultados de Provas' }];
 
@@ -18,7 +23,7 @@ function statusOf(row) {
 }
 
 // No painel o perfil comum aparece como operador, que é como a tela chama quem faz o treinamento.
-const roleOf = (row) => (row.user_role === 'usuario' ? 'Operador' : ROLE_LABELS[row.user_role] || row.user_role || '—');
+const roleOf = (row) => (row.user_role === 'usuario' ? 'Operador' : roleLabel(row.user_role));
 
 // Manual sem PDF ou sem vídeo mostra "—" na coluna da parte que não existe.
 const pdfStatus = (row) => (row.has_pdf === false ? '—' : row.pdf_completed ? 'Concluído' : 'Pendente');
@@ -35,6 +40,7 @@ export default function PainelUso() {
   const [manualFilter, setManualFilter] = useState('');
   const [operatorFilter, setOperatorFilter] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
+  const [unitFilter, setUnitFilter] = useState('');
   const [tab, setTab] = useState('uso');
 
   useEffect(() => {
@@ -47,7 +53,11 @@ export default function PainelUso() {
   const sectorsOf = (row) => row.sector_names || [row.sector_name];
   const scope = sectorScope(user, rows.flatMap(sectorsOf));
   const sector = scope.locked || sectorFilter;
-  const inSector = rows.filter((row) => !sector || sectorsOf(row).includes(sector));
+  // Unidades da pessoa (o backend já limita às unidades de quem consulta). O filtro só aparece com mais de uma.
+  const unitsOf = (row) => row.unit_names || [];
+  const unitOptions = [...new Set(rows.flatMap(unitsOf))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const showUnits = unitOptions.length > 1;
+  const inSector = rows.filter((row) => (!sector || sectorsOf(row).includes(sector)) && (!unitFilter || unitsOf(row).includes(unitFilter)));
   // As listas de manual e pessoa mostram só o que existe no setor escolhido.
   const byLabel = (a, b) => a.label.localeCompare(b.label, 'pt-BR');
   const manualOptions = [...new Map(inSector.map((row) => [String(row.manual_id), row.manual_title])).entries()].map(([value, label]) => ({ value, label })).sort(byLabel);
@@ -63,25 +73,22 @@ export default function PainelUso() {
   }).filter((item) => item.total > 0);
 
   function exportCsv() {
-    const columns = ['Pessoa', 'Perfil', 'Setor', 'Manual', 'Status', 'PDF', 'Video', 'Ultimo acesso', 'Conclusao'];
-    const values = filtered.map((row) => [row.user_name, roleOf(row), row.sector_name, row.manual_title, statusOf(row), pdfStatus(row), videoStatus(row), formatDate(row.last_access_at), formatDate(row.completed_at)]);
-    const csv = [columns, ...values].map((line) => line.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
-    link.download = `painel-uso-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    const columns = ['Pessoa', 'Perfil', 'Setor', 'Unidade', 'Manual', 'Status', 'PDF', 'Video', 'Ultimo acesso', 'Conclusao'];
+    const values = filtered.map((row) => [row.user_name, roleOf(row), row.sector_name, unitsOf(row).join(', '), row.manual_title, statusOf(row), pdfStatus(row), videoStatus(row), formatDate(row.last_access_at), formatDate(row.completed_at)]);
+    // Usa o mesmo gerador das outras planilhas (acentos no Excel e proteção contra fórmulas).
+    downloadCsv(`painel-uso-${new Date().toISOString().slice(0, 10)}.csv`, [columns, ...values]);
   }
 
   return <section className="page-section usage-dashboard">
     <BackButton fallback="/configuracoes" />
-    <div className="page-heading"><p className="eyebrow">Acompanhamento</p><h1>Painel de uso</h1><p>Progresso de operadores, gestores e suporte nos manuais e resultados das provas.</p></div>
+    <div className="page-heading"><p className="eyebrow">Acompanhamento</p><h1>Painel de uso</h1><p>Progresso de operadores, gestores e administradores nos manuais e resultados das provas.</p></div>
     <div className="tab-list" role="tablist">{TABS.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? 'tab active' : 'tab'} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
     {tab === 'provas' ? <ResultadosProvas /> : <>
     <div className="dashboard-filters">
       <div className="filter-field"><label htmlFor="manual-search">Manual</label><SearchSelect id="manual-search" value={manualFilter} onChange={setManualFilter} options={manualOptions} placeholder="Pesquisar manual pelo nome" label="Pesquisar manual pelo nome" allLabel="Todos os manuais" emptyText="Nenhum manual encontrado" /></div>
       <div className="filter-field"><label htmlFor="operator-search">Pessoa</label><SearchSelect id="operator-search" value={operatorFilter} onChange={setOperatorFilter} options={operatorOptions} placeholder="Pesquisar pessoa pelo nome" label="Pesquisar pessoa pelo nome" allLabel="Todas as pessoas" emptyText="Nenhuma pessoa encontrada" /></div>
       <div className="filter-field"><label htmlFor="sector-search">Setor</label><SearchSelect id="sector-search" value={sector} onChange={(value) => { setSectorFilter(value); setManualFilter(''); setOperatorFilter(''); }} options={scope.options} placeholder="Pesquisar setor pelo nome" label="Pesquisar setor pelo nome" allLabel={scope.allLabel} emptyText="Nenhum setor encontrado" locked={Boolean(scope.locked)} /></div>
+      {showUnits && <div className="filter-field"><label htmlFor="unit-search">Unidade</label><SearchSelect id="unit-search" value={unitFilter} onChange={(value) => { setUnitFilter(value); setManualFilter(''); setOperatorFilter(''); }} options={unitOptions} placeholder="Pesquisar unidade pelo nome" label="Pesquisar unidade pelo nome" allLabel="Todas as unidades" emptyText="Nenhuma unidade encontrada" /></div>}
       <button type="button" className="primary-button export-button" onClick={exportCsv}><Download size={17} /> Exportar CSV</button>
     </div>
     <div className="metric-grid">
@@ -91,8 +98,8 @@ export default function PainelUso() {
       <article className="metric-card"><BarChart3 /><div><strong>{completionRate}%</strong><span>Índice de conclusão</span></div></article>
     </div>
     <div className="dashboard-panel"><h2>Conclusão por manual</h2>{manualStats.length ? <div className="bar-chart">{manualStats.map((item) => <div className="bar-row" key={item.id}><span title={item.title}>{item.title}</span><div className="bar-track"><i style={{ width: `${item.rate}%` }} /></div><strong>{item.rate}%</strong></div>)}</div> : <p className="empty-state">Nenhum dado para os filtros escolhidos.</p>}</div>
-    <div className="dashboard-panel"><h2>Detalhamento por pessoa</h2><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Setor</th><th>Manual</th><th>Status</th><th>PDF</th><th>Vídeo</th><th>Último acesso</th><th>Conclusão</th></tr></thead><tbody>
-      {filtered.map((row) => <tr key={`${row.user_id}-${row.manual_id}`}><td>{row.user_name}</td><td>{roleOf(row)}</td><td>{row.sector_name}</td><td>{row.manual_title}</td><td><span className={`status-pill status-${statusOf(row).toLowerCase().replace(' ', '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '')}`}>{statusOf(row)}</span></td><td>{pdfStatus(row)}</td><td>{videoStatus(row)}</td><td>{formatDate(row.last_access_at)}</td><td>{formatDate(row.completed_at)}</td></tr>)}
+    <div className="dashboard-panel"><h2>Detalhamento por pessoa</h2><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Setor</th>{showUnits && <th>Unidade</th>}<th>Manual</th><th>Status</th><th>PDF</th><th>Vídeo</th><th>Último acesso</th><th>Conclusão</th></tr></thead><tbody>
+      {filtered.map((row) => <tr key={`${row.user_id}-${row.manual_id}`}><td>{row.user_name}</td><td>{roleOf(row)}</td><td>{row.sector_name}</td>{showUnits && <td>{unitsOf(row).join(', ')}</td>}<td>{row.manual_title}</td><td><span className={`status-pill status-${statusOf(row).toLowerCase().replace(' ', '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '')}`}>{statusOf(row)}</span></td><td>{pdfStatus(row)}</td><td>{videoStatus(row)}</td><td>{formatDate(row.last_access_at)}</td><td>{formatDate(row.completed_at)}</td></tr>)}
     </tbody></table></div></div>
     </>}
   </section>;

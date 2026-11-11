@@ -55,7 +55,7 @@ export default function CadastroSistemas() {
     } catch (error) { toast.error(error.message); }
   }
 
-  // Exclui o sistema após confirmação explícita do suporte.
+  // Exclui o sistema após confirmação explícita de quem cadastra sistemas.
   async function handleDelete(systemId) {
     if (!window.confirm('Remover este sistema?')) return;
     try {

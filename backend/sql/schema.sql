@@ -20,6 +20,15 @@
 --     ends_at passa a aceitar nulo; prova de manual nunca expira (ends_at sempre nulo).
 --   - Modelos de prova: exam_templates e exam_template_questions (por setor), exams.template_id
 --     e exam_assignees (prova aplicada só a colaboradores escolhidos).
+--   - Perfis de acesso (nov/2026): suporte vira admin; novos admin_cadastros (cria usuários, setores e sistemas,
+--     sem painel) e gestor_area (painel e resultados dos seus setores, sem publicar). As permissões de cada perfil
+--     ficam em backend/src/utils/access.js; aqui só a lista de perfis válidos.
+--   - Unidades (nov/2026): tabelas units, user_units e manual_units e exams.unit_id. O setor é comum à rede e a
+--     unidade é um segundo filtro. Na migração, todos os usuários existentes entram na unidade 'Matriz' e os
+--     manuais existentes ficam para todas as unidades (sem linhas em manual_units).
+--   - Endereço da unidade (nov/2026): cep, logradouro, numero, complemento, bairro, cidade e uf em units (opcionais).
+--   - Revisão de segurança (nov/2026): users.must_change_password (senha provisória precisa ser trocada no
+--     primeiro acesso), admin padrão criado só quando não existe e índices nas chaves estrangeiras de usuário.
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS sectors (
@@ -64,6 +73,8 @@ CREATE TABLE IF NOT EXISTS manuals (
 -- Colunas introduzidas depois da primeira versão.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS identificador VARCHAR(160);
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+-- TRUE = a senha foi definida por outra pessoa (cadastro, importação ou redefinição) e precisa ser trocada.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE manuals ADD COLUMN IF NOT EXISTS system_id INTEGER;
 ALTER TABLE manuals ADD COLUMN IF NOT EXISTS sector_id INTEGER;
 ALTER TABLE manuals ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
@@ -80,11 +91,12 @@ INSERT INTO systems (nome, resumo)
 SELECT 'Geral', 'Sistema padrão para dados migrados'
 WHERE NOT EXISTS (SELECT 1 FROM systems WHERE nome = 'Geral');
 
--- Converte o perfil legado antes de aplicar a nova restrição.
+-- Converte os perfis legados (gerente e suporte viram admin) antes de aplicar a nova restrição.
+-- Perfis: admin, admin_cadastros, editor_conteudo, gestor_area, gerente_setor e usuario (até 20 caracteres).
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-UPDATE users SET role = 'suporte' WHERE role = 'gerente';
+UPDATE users SET role = 'admin' WHERE role IN ('gerente', 'suporte');
 ALTER TABLE users ADD CONSTRAINT users_role_check
-  CHECK (role IN ('suporte', 'editor_conteudo', 'gerente_setor', 'usuario'));
+  CHECK (role IN ('admin', 'admin_cadastros', 'editor_conteudo', 'gestor_area', 'gerente_setor', 'usuario'));
 
 UPDATE users
 SET identificador = COALESCE(NULLIF(BTRIM(email), ''), 'usuario_' || id)
@@ -151,7 +163,7 @@ ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS page_count INTEGER NOT NULL
 ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS last_page INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE manual_progress ADD COLUMN IF NOT EXISTS pages_viewed INTEGER[] NOT NULL DEFAULT '{}';
 
--- Setores de cada usuário. Operador e gerente de setor podem ter vários; suporte não precisa de nenhum.
+-- Setores de cada usuário. Os perfis podem ter vários; admin e editor de conteúdo não precisam de nenhum.
 -- O acesso a manuais, provas e painel considera todos os setores do usuário.
 CREATE TABLE IF NOT EXISTS user_sectors (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -159,7 +171,7 @@ CREATE TABLE IF NOT EXISTS user_sectors (
   PRIMARY KEY (user_id, sector_id)
 );
 
--- Provas por setor: gerente de setor cria para o próprio setor; suporte escolhe um setor ou todos.
+-- Provas por setor: gerente de setor cria para o próprio setor; admin escolhe um setor ou todos.
 -- sector_id NULL significa prova para todos os setores (ou, com manual_id, para os setores do manual).
 CREATE TABLE IF NOT EXISTS exams (
   id SERIAL PRIMARY KEY,
@@ -232,7 +244,7 @@ ALTER TABLE exam_submissions ADD CONSTRAINT exam_submissions_status_check
   CHECK (status IN ('em_andamento', 'enviada', 'encerrada'));
 
 -- Modelos de prova: perguntas guardadas para reaplicar (ex.: colaborador novo). Cada modelo pertence a um setor
--- e só quem é desse setor o vê (suporte e editor de conteúdo veem todos). Ao aplicar, as perguntas são copiadas
+-- e só quem é desse setor o vê (admin e editor de conteúdo veem todos). Ao aplicar, as perguntas são copiadas
 -- para exam_questions: editar ou excluir o modelo depois não altera provas e resultados já existentes.
 CREATE TABLE IF NOT EXISTS exam_templates (
   id SERIAL PRIMARY KEY,
@@ -278,6 +290,64 @@ CREATE TABLE IF NOT EXISTS exam_answers (
   answer_text TEXT,
   PRIMARY KEY (submission_id, question_id)
 );
+
+-- Unidades (filiais / endereços) da empresa. Regra do produto: o setor é comum a todas as unidades e a unidade
+-- é um segundo filtro. O colaborador vê o manual quando é de um dos setores do manual E de uma das unidades do
+-- manual; manual sem nenhuma linha em manual_units vale para todas as unidades.
+CREATE TABLE IF NOT EXISTS units (
+  id SERIAL PRIMARY KEY,
+  nome VARCHAR(120) NOT NULL CHECK (BTRIM(nome) <> ''),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Nome único sem diferenciar maiúsculas ("Matriz" e "matriz" são a mesma unidade).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_units_nome_unique ON units (LOWER(nome));
+
+-- Endereço completo da unidade (todos opcionais). CEP só com os 8 dígitos; UF com a sigla em maiúsculas.
+ALTER TABLE units ADD COLUMN IF NOT EXISTS cep VARCHAR(8);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS logradouro VARCHAR(160);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS numero VARCHAR(20);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS complemento VARCHAR(80);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS bairro VARCHAR(80);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS cidade VARCHAR(80);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS uf CHAR(2);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE units DROP CONSTRAINT IF EXISTS units_cep_check;
+ALTER TABLE units ADD CONSTRAINT units_cep_check CHECK (cep IS NULL OR cep ~ '^[0-9]{8}$');
+ALTER TABLE units DROP CONSTRAINT IF EXISTS units_uf_check;
+ALTER TABLE units ADD CONSTRAINT units_uf_check CHECK (uf IS NULL OR uf ~ '^[A-Z]{2}$');
+
+-- Unidades de cada usuário (uma ou mais). Admin e editor de conteúdo enxergam todas e não precisam de nenhuma.
+CREATE TABLE IF NOT EXISTS user_units (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
+  PRIMARY KEY (user_id, unit_id)
+);
+
+-- Unidades em que o manual vale. Nenhuma linha = todas as unidades (conteúdo da rede inteira).
+CREATE TABLE IF NOT EXISTS manual_units (
+  manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
+  unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
+  PRIMARY KEY (manual_id, unit_id)
+);
+
+-- Prova avulsa (aplicada de um modelo) para uma unidade; nulo = todas as unidades.
+-- A prova de manual segue as unidades do manual, por isso unit_id fica nulo nela.
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS unit_id INTEGER REFERENCES units(id) ON DELETE RESTRICT;
+ALTER TABLE exams DROP CONSTRAINT IF EXISTS exams_manual_unit_check;
+ALTER TABLE exams ADD CONSTRAINT exams_manual_unit_check CHECK (manual_id IS NULL OR unit_id IS NULL);
+
+-- Migração das instalações que ainda não tinham unidades: cria a 'Matriz' e coloca nela todos os usuários
+-- que ainda não têm unidade. Só roda enquanto não existir nenhuma unidade, para não recolocar na Matriz quem
+-- foi tirado dela depois. Os manuais existentes ficam sem linhas em manual_units, ou seja, para todas as unidades.
+DO $$
+DECLARE
+  matriz_id INTEGER;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM units) THEN
+    INSERT INTO units (nome) VALUES ('Matriz') RETURNING id INTO matriz_id;
+    INSERT INTO user_units (user_id, unit_id) SELECT id, matriz_id FROM users ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   id BIGSERIAL PRIMARY KEY,
@@ -335,29 +405,35 @@ CREATE INDEX IF NOT EXISTS idx_exam_submissions_user_id ON exam_submissions(user
 CREATE INDEX IF NOT EXISTS idx_exam_templates_sector_id ON exam_templates(sector_id);
 CREATE INDEX IF NOT EXISTS idx_exam_assignees_user_id ON exam_assignees(user_id);
 CREATE INDEX IF NOT EXISTS idx_exams_template_id ON exams(template_id);
+CREATE INDEX IF NOT EXISTS idx_user_units_unit_id ON user_units(unit_id);
+CREATE INDEX IF NOT EXISTS idx_manual_units_unit_id ON manual_units(unit_id);
+CREATE INDEX IF NOT EXISTS idx_exams_unit_id ON exams(unit_id) WHERE unit_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_manual_version_history_manual_id ON manual_version_history(manual_id);
 CREATE INDEX IF NOT EXISTS idx_progress_version_history_manual_id ON progress_version_history(manual_id);
+-- Índices nas chaves estrangeiras para usuário/pergunta: aceleram a exclusão de usuário (ON DELETE CASCADE/SET NULL)
+-- e as consultas por autor, sem varrer a tabela inteira.
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_manuals_criado_por ON manuals(criado_por);
+CREATE INDEX IF NOT EXISTS idx_exams_criado_por ON exams(criado_por);
+CREATE INDEX IF NOT EXISTS idx_exam_templates_criado_por ON exam_templates(criado_por);
+CREATE INDEX IF NOT EXISTS idx_progress_version_history_user_id ON progress_version_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_exam_answers_question_id ON exam_answers(question_id);
 
--- Acesso inicial: admin / admin123. Troque a senha após o primeiro acesso.
--- Reexecuções preservam a senha e resolvem contas antigas por e-mail ou identificador.
+-- Acesso inicial: admin / admin123 (senha provisória: o sistema obriga a troca no primeiro login).
+-- O admin padrão só é criado quando ainda não existe (por e-mail ou identificador). Reexecuções não alteram
+-- nome, perfil nem senha de quem já existe.
 DO $$
-DECLARE
-  existing_admin_id INTEGER;
 BEGIN
-  SELECT id INTO existing_admin_id FROM users WHERE email = 'admin@manual.local' LIMIT 1;
-  IF existing_admin_id IS NULL THEN
-    SELECT id INTO existing_admin_id FROM users WHERE identificador = 'admin' LIMIT 1;
-  END IF;
-
-  IF existing_admin_id IS NULL THEN
-    INSERT INTO users (nome, email, identificador, senha, role)
+  IF NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@manual.local' OR identificador = 'admin') THEN
+    INSERT INTO users (nome, email, identificador, senha, role, must_change_password)
     VALUES ('Suporte Admin', 'admin@manual.local', 'admin',
-      '$2a$10$aEV41I/MA/qN00fWXu5UCuO/kPA0KT.DG5Br/zho02MdrowLgDIeC', 'suporte');
-  ELSE
-    UPDATE users SET nome = 'Suporte Admin', role = 'suporte'
-    WHERE id = existing_admin_id;
+      '$2a$10$aEV41I/MA/qN00fWXu5UCuO/kPA0KT.DG5Br/zho02MdrowLgDIeC', 'admin', TRUE);
   END IF;
 END $$;
+
+-- Qualquer conta que ainda use a senha padrão admin123 é obrigada a trocá-la.
+UPDATE users SET must_change_password = TRUE
+WHERE senha = '$2a$10$aEV41I/MA/qN00fWXu5UCuO/kPA0KT.DG5Br/zho02MdrowLgDIeC' AND must_change_password = FALSE;
 
 COMMIT;

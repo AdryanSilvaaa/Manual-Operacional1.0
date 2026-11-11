@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { ClipboardCheck } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { ROLES } from '../constants/roles.js';
+import { can, PERMISSIONS } from '../constants/roles.js';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 
 const DISMISSED_KEY = 'provas-adiadas';
@@ -24,7 +24,7 @@ export default function AvisoProva() {
   const navigate = useNavigate();
   const location = useLocation();
   const [exam, setExam] = useState(null);
-  const isCollaborator = user?.role === ROLES.USER;
+  const isCollaborator = can(user, PERMISSIONS.TAKE_EXAMS);
   const takingExam = location.pathname.startsWith('/provas/');
   const { pathname } = location;
 

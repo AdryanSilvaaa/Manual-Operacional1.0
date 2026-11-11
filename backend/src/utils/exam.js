@@ -50,39 +50,28 @@ export function validateQuestions(questions) {
 }
 
 /**
- * Valida e normaliza o corpo de criação; devolve { error } ou { exam }.
- * Com forManual (prova cadastrada junto com o manual), não há período: a prova começa no cadastro e não expira
- * (endsAt null), ficando disponível até o colaborador fazer. Ela é liberada quando ele conclui 100% do manual;
- * required diz se ele precisa fazê-la na hora ou pode deixar para depois. Datas enviadas são ignoradas.
+ * Valida e normaliza a prova cadastrada junto com o manual; devolve { error } ou { exam }.
+ * Não há período: a prova começa no cadastro e não expira (endsAt null), ficando disponível até o colaborador fazer.
+ * Ela é liberada quando ele conclui 100% do manual; required diz se ele precisa fazê-la na hora ou pode deixar
+ * para depois. Datas enviadas são ignoradas. Provas com período saem de um modelo (validateApplyPayload).
  */
-export function validateExamPayload(body = {}, { forManual = false } = {}) {
-  const titulo = typeof body.titulo === 'string' ? body.titulo.trim() : '';
-  const startsAt = forManual ? new Date() : new Date(body.startsAt);
-  const endsAt = forManual ? null : new Date(body.endsAt);
-  const questions = body.questions;
-
+function validateManualExam(body = {}) {
+  const titulo = cleanText(body.titulo);
   if (!titulo) return { error: 'Informe o título da prova' };
-  if (Number.isNaN(startsAt.getTime()) || (endsAt !== null && Number.isNaN(endsAt.getTime()))) {
-    return { error: 'Informe a data de início e a data final da prova' };
-  }
-  if (endsAt !== null && endsAt <= startsAt) return { error: 'A data final deve ser depois da data de início' };
-  const checked = validateQuestions(questions);
+  const checked = validateQuestions(body.questions);
   if (checked.error) return checked;
-  const normalized = checked.questions;
-
-  const descricao = cleanText(body.descricao);
-  const exam = { titulo, descricao, startsAt: startsAt.toISOString(), endsAt: endsAt ? endsAt.toISOString() : null, questions: normalized };
-  if (!forManual) {
-    const audience = parseAudience(body);
-    if (audience.error) return audience;
-    exam.userIds = audience.userIds;
-  }
-  if (forManual) {
-    exam.required = body.required === true || body.required === 'true';
-    // Prova do manual montada a partir de um modelo: o controller confere se o modelo é do setor de quem cadastra.
-    exam.templateId = parseId(body.templateId);
-  }
-  return { exam };
+  return {
+    exam: {
+      titulo,
+      descricao: cleanText(body.descricao),
+      startsAt: new Date().toISOString(),
+      endsAt: null,
+      questions: checked.questions,
+      required: body.required === true || body.required === 'true',
+      // Prova do manual montada a partir de um modelo: o controller confere se o modelo é do setor de quem cadastra.
+      templateId: parseId(body.templateId)
+    }
+  };
 }
 
 /** Indica se a prova pode ser respondida agora. ends_at nulo (prova de manual sem prazo) não expira. */
@@ -98,7 +87,7 @@ export function parseManualExam(value) {
     try { body = JSON.parse(value); } catch { return { error: 'Prova do manual inválida' }; }
   }
   if (!body || typeof body !== 'object') return { error: 'Prova do manual inválida' };
-  return validateExamPayload(body, { forManual: true });
+  return validateManualExam(body);
 }
 
 /**
@@ -142,12 +131,18 @@ export function validateTemplatePayload(body = {}) {
 }
 
 /**
- * Para quem vai a prova avulsa: audience "colaboradores" exige ao menos um colaborador em userIds;
- * "setor" (padrão) vale para todo o setor escolhido. Devolve { error } ou { userIds } (vazio = setor todo).
+ * Aplicação de um modelo: período obrigatório e o público. audience "colaboradores" exige ao menos um colaborador
+ * em userIds; "setor" vale para todo o setor do modelo; "todos" vale para todos os setores (só admin, conferido
+ * no controller). Devolve { error } ou { application }.
  */
-export function parseAudience(body = {}) {
-  if (body.audience !== 'colaboradores') return { userIds: [] };
+export function validateApplyPayload(body = {}) {
+  const startsAt = new Date(body.startsAt);
+  const endsAt = new Date(body.endsAt);
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return { error: 'Informe a data de início e a data final da prova' };
+  if (endsAt <= startsAt) return { error: 'A data final deve ser depois da data de início' };
+  const audience = ['setor', 'todos'].includes(body.audience) ? body.audience : 'colaboradores';
   const list = Array.isArray(body.userIds) ? body.userIds : [];
   const userIds = [...new Set(list.map(parseId).filter(Boolean))];
-  return userIds.length ? { userIds } : { error: 'Escolha pelo menos um colaborador' };
+  if (audience === 'colaboradores' && !userIds.length) return { error: 'Escolha pelo menos um colaborador' };
+  return { application: { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), audience, userIds: audience === 'colaboradores' ? userIds : [] } };
 }

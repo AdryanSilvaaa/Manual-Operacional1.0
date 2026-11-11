@@ -44,3 +44,18 @@ test('deleteStoredFile apaga só arquivos locais gravados pelo sistema', async (
   await assert.rejects(fs.access(path.join(dir, name)));
   await fs.access(path.join(backendDir, 'package.json'));
 });
+
+test('uploadFile grava com a extensão do tipo validado, não com o nome enviado, e recusa PDF falso', async () => {
+  const { uploadFile } = await import('../src/config/storage.js');
+  const os = await import('node:os');
+  const temp = path.join(os.tmpdir(), `teste-upload-${Date.now()}`);
+  // PDF verdadeiro com nome ".html": a extensão gravada precisa ser .pdf.
+  await fs.writeFile(temp, '%PDF-1.4 conteudo');
+  const saved = await uploadFile({ path: temp, originalname: 'pagina.html', mimetype: 'application/pdf', size: 17 }, 'pdfs');
+  assert.match(saved, /^\/uploads\/pdfs\/[0-9a-f-]{36}\.pdf$/);
+  await deleteStoredFile(saved);
+  // Arquivo que não começa com %PDF- é recusado com 400.
+  await fs.writeFile(temp, '<script>alert(1)</script>');
+  await assert.rejects(uploadFile({ path: temp, originalname: 'a.pdf', mimetype: 'application/pdf', size: 25 }, 'pdfs'), { status: 400 });
+  await fs.rm(temp, { force: true });
+});

@@ -1,6 +1,6 @@
 /**
  * "Usar modelo": lista os modelos de prova do setor do usuário e entrega o modelo escolhido (com perguntas)
- * para a tela preencher o formulário. Usado em Criar Prova e na prova do manual em Criar Manual.
+ * para a tela preencher o formulário. Usado na prova do manual em Criar Manual.
  */
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';

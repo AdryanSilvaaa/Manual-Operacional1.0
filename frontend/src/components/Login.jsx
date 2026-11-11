@@ -5,7 +5,6 @@
 import { useState } from 'react';
 import { LogIn } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ROLES } from '../constants/roles.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import BrandLogo from './BrandLogo.jsx';
@@ -25,9 +24,9 @@ export default function Login() {
 
     try {
       const user = await login(identificador, senha);
+      // Senha provisória vai direto para a troca; senão volta à página pedida antes do login (ou Sistemas).
       const requestedPage = location.state?.from?.pathname;
-      const defaultPage = user.role === ROLES.MANAGER ? '/configuracoes' : '/sistemas';
-      navigate(requestedPage || defaultPage, { replace: true });
+      navigate(user.must_change_password ? '/alterar-senha' : (requestedPage || '/sistemas'), { replace: true });
     } catch (err) {
       toast.error(err.message);
     } finally {

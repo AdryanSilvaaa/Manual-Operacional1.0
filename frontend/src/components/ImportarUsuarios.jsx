@@ -13,14 +13,14 @@ import { downloadCsv, parseCsv, readTextFile } from '../utils/csv.js';
 // Nomes de coluna aceitos no cabeçalho, comparados sem acento e sem maiúsculas.
 const HEADER_ALIASES = {
   nome: 'nome', login: 'login', usuario: 'login', 'usuario para login': 'login', identificador: 'login',
-  perfil: 'perfil', setor: 'setores', setores: 'setores', senha: 'senha'
+  perfil: 'perfil', setor: 'setores', setores: 'setores', unidade: 'unidades', unidades: 'unidades', senha: 'senha'
 };
 
 function normalize(text) {
   return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }
 
-/** Transforma as linhas do CSV em objetos { linha, nome, login, perfil, setores, senha }, ignorando linhas vazias. */
+/** Transforma as linhas do CSV em objetos { linha, nome, login, perfil, setores, unidades, senha }, ignorando linhas vazias. */
 function toImportRows(table) {
   const [header = [], ...lines] = table;
   const columns = header.map((name) => HEADER_ALIASES[normalize(name)]);
@@ -38,15 +38,15 @@ function toImportRows(table) {
 
 function ImportTable({ rows }) {
   return <div className="report-table-wrap"><table className="report-table">
-    <thead><tr><th>Linha</th><th>Nome</th><th>Login</th><th>Perfil</th><th>Setores</th><th>Situação</th></tr></thead>
+    <thead><tr><th>Linha</th><th>Nome</th><th>Login</th><th>Perfil</th><th>Setores</th><th>Unidades</th><th>Situação</th></tr></thead>
     <tbody>{rows.map((row) => <tr key={row.linha}>
-      <td>{row.linha}</td><td>{row.nome}</td><td>{row.login}</td><td>{row.perfil}</td><td>{row.setores.join(', ')}</td>
+      <td>{row.linha}</td><td>{row.nome}</td><td>{row.login}</td><td>{row.perfil}</td><td>{row.setores.join(', ')}</td><td>{(row.unidades || []).join(', ')}</td>
       <td className={row.status === 'ok' ? 'import-ok' : 'import-error'}>{row.status === 'ok' ? 'Pronto' : row.erro}</td>
     </tr>)}</tbody>
   </table></div>;
 }
 
-export default function ImportarUsuarios({ apiUrl, token, sectors, onImported }) {
+export default function ImportarUsuarios({ apiUrl, token, sectors, units = [], onImported }) {
   const [rows, setRows] = useState([]);
   const [check, setCheck] = useState(null);
   const [result, setResult] = useState(null);
@@ -56,13 +56,14 @@ export default function ImportarUsuarios({ apiUrl, token, sectors, onImported })
   const fileInput = useRef(null);
   const errors = check ? check.total - check.validos : 0;
 
-  // O modelo já traz nomes de setores que existem, para servir de exemplo de escrita.
+  // O modelo já traz nomes de setores e unidades que existem, para servir de exemplo de escrita.
   function downloadTemplate() {
     const [first = 'Nome do setor', second] = sectors.map((sector) => sector.nome);
+    const [unitA = 'Matriz', unitB] = units.map((unit) => unit.nome);
     downloadCsv('modelo-importacao-usuarios.csv', [
-      ['nome', 'login', 'perfil', 'setores', 'senha'],
-      ['Maria da Silva', 'maria.silva', 'Usuário comum', first, ''],
-      ['João Souza', 'joao.souza', 'Gerente de setor', second ? `${first}, ${second}` : first, '']
+      ['nome', 'login', 'perfil', 'setores', 'unidades', 'senha'],
+      ['Maria da Silva', 'maria.silva', 'Usuário comum', first, unitA, ''],
+      ['João Souza', 'joao.souza', 'Gerente de setor', second ? `${first}, ${second}` : first, unitB ? `${unitA}, ${unitB}` : unitA, '']
     ]);
   }
 
@@ -100,8 +101,8 @@ export default function ImportarUsuarios({ apiUrl, token, sectors, onImported })
 
   function downloadAccesses() {
     downloadCsv(`acessos-criados-${new Date().toISOString().slice(0, 10)}.csv`, [
-      ['nome', 'login', 'senha provisória', 'perfil', 'setores'],
-      ...result.acessos.map((access) => [access.nome, access.login, access.senha || '(a da planilha)', access.perfil, access.setores.join(', ')])
+      ['nome', 'login', 'senha provisória', 'perfil', 'setores', 'unidades'],
+      ...result.acessos.map((access) => [access.nome, access.login, access.senha || '(a da planilha)', access.perfil, access.setores.join(', '), (access.unidades || []).join(', ')])
     ]);
   }
 
@@ -109,8 +110,9 @@ export default function ImportarUsuarios({ apiUrl, token, sectors, onImported })
     <h2>Importar usuários por planilha</h2>
     <p className="hint">Baixe o modelo, preencha no Excel uma pessoa por linha e salve como CSV. Depois escolha o arquivo e confira antes de cadastrar.</p>
     <ul className="hint import-rules">
-      <li><strong>perfil:</strong> Usuário comum, Gerente de setor, Editor de conteúdo ou Suporte. Vazio vira Usuário comum.</li>
+      <li><strong>perfil:</strong> Usuário comum, Gerente de setor, Gestor de área, Editor de conteúdo, Administrador de cadastros ou Admin (só quem é Admin cadastra Admin). Vazio vira Usuário comum.</li>
       <li><strong>setores:</strong> nomes iguais aos de Configurações &gt; Setores, separados por vírgula.</li>
+      <li><strong>unidades:</strong> nomes iguais aos de Configurações &gt; Unidades, separados por vírgula. Com uma unidade só cadastrada, pode deixar em branco.</li>
       <li><strong>senha:</strong> deixe em branco para o sistema gerar uma senha provisória.</li>
     </ul>
     <div className="import-actions">

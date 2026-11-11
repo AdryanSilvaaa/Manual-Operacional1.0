@@ -9,7 +9,15 @@ import {
   updateSystem
 } from '../models/System.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
+import { audit } from '../models/Audit.js';
 
+// Tamanho máximo do nome (systems.nome VARCHAR(160) no schema.sql).
+const MAX_NAME_LENGTH = 160;
+
+/** Nome e resumo vindos da tela: só texto, sem espaços nas pontas. undefined = campo não enviado. */
+const cleanField = (value) => (value === undefined ? undefined : typeof value === 'string' ? value.trim() : '');
+
+/** Lista todos os sistemas com a quantidade de manuais que o usuário pode ver em cada um. */
 export async function index(req, res) {
   let systems;
   try {
@@ -25,12 +33,15 @@ export async function index(req, res) {
   res.json(systems);
 }
 
+/** Cadastra um sistema (vale para todos os setores). */
 export async function store(req, res) {
-  const { nome, resumo } = req.body;
+  const nome = cleanField(req.body.nome) || '';
+  const resumo = cleanField(req.body.resumo) || null;
 
   if (!nome) {
     return res.status(400).json({ message: 'Nome do sistema e obrigatorio' });
   }
+  if (nome.length > MAX_NAME_LENGTH) return res.status(400).json({ message: `O nome pode ter até ${MAX_NAME_LENGTH} caracteres` });
 
   let system;
   try {
@@ -43,16 +54,19 @@ export async function store(req, res) {
     system = demoStore.createSystem({ nome, resumo });
   }
 
+  audit(req.user.id, 'system_created', 'system', system.id, { nome }).catch(() => {});
   res.status(201).json(system);
 }
 
+/** Renomeia ou troca o resumo; os manuais continuam ligados ao mesmo sistema. */
 export async function update(req, res) {
-  const nome = req.body.nome === undefined ? undefined : String(req.body.nome).trim();
-  const resumo = req.body.resumo === undefined ? undefined : String(req.body.resumo ?? '').trim();
+  const nome = cleanField(req.body.nome);
+  const resumo = cleanField(req.body.resumo);
 
   if (nome !== undefined && !nome) {
     return res.status(400).json({ message: 'Nome do sistema e obrigatorio' });
   }
+  if (nome && nome.length > MAX_NAME_LENGTH) return res.status(400).json({ message: `O nome pode ter até ${MAX_NAME_LENGTH} caracteres` });
 
   let system;
   try {
@@ -72,6 +86,7 @@ export async function update(req, res) {
   res.json(system);
 }
 
+/** Exclui o sistema; o banco recusa (23503) se ainda houver manuais nele. */
 export async function destroy(req, res) {
   try {
     await deleteSystem(req.params.id);
@@ -86,5 +101,6 @@ export async function destroy(req, res) {
     demoStore.deleteSystem(req.params.id);
   }
 
+  audit(req.user.id, 'system_deleted', 'system', req.params.id).catch(() => {});
   res.status(204).send();
 }

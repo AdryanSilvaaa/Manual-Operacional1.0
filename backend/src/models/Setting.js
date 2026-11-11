@@ -1,6 +1,6 @@
 /**
  * Configurações gerais da aplicação guardadas no banco (tabela app_settings), uma linha por chave.
- * Hoje guarda a aparência (chave "branding"): cores e logos escolhidas pelo suporte.
+ * Hoje guarda a aparência (chave "branding"): cores e logos escolhidas pelo admin.
  */
 import { query } from '../config/db.js';
 

@@ -1,3 +1,7 @@
+/**
+ * Trilha de auditoria (tabela audit_logs): quem fez o quê e quando (ex.: login, usuário criado, manual excluído).
+ * details vai como JSON; entityId vira texto para aceitar qualquer tipo de identificador.
+ */
 import { query } from '../config/db.js';
 
 export async function audit(userId, action, entityType = null, entityId = null, details = {}) {

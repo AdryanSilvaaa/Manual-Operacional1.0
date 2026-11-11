@@ -1,31 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gradeSubmission, isExamOpen, parseManualExam, parseAudience, validateExamPayload, validateTemplatePayload } from '../src/utils/exam.js';
+import { gradeSubmission, isExamOpen, parseManualExam, validateApplyPayload, validateQuestions, validateTemplatePayload } from '../src/utils/exam.js';
 
 const multipleChoice = { type: 'multipla_escolha', prompt: 'Qual opção?', options: ['A', 'B', 'C', 'D'], correctOption: 2 };
 const open = { type: 'aberta', prompt: 'Explique o procedimento.' };
-const base = { titulo: 'Prova de faturamento', startsAt: '2026-10-20T08:00:00-03:00', endsAt: '2026-10-21T18:00:00-03:00' };
+const base = { startsAt: '2026-10-20T08:00:00-03:00', endsAt: '2026-10-21T18:00:00-03:00' };
 
 test('aceita prova com múltipla escolha e resposta aberta', () => {
-  const { error, exam } = validateExamPayload({ ...base, questions: [multipleChoice, open] });
+  const { error, questions } = validateQuestions([multipleChoice, open]);
   assert.equal(error, undefined);
-  assert.equal(exam.questions.length, 2);
-  assert.deepEqual(exam.questions[1], { type: 'aberta', prompt: 'Explique o procedimento.', options: null, correctOption: null });
+  assert.equal(questions.length, 2);
+  assert.deepEqual(questions[1], { type: 'aberta', prompt: 'Explique o procedimento.', options: null, correctOption: null });
 });
 
 test('limita a prova a 10 perguntas', () => {
-  const { error } = validateExamPayload({ ...base, questions: Array(11).fill(multipleChoice) });
+  const { error } = validateQuestions(Array(11).fill(multipleChoice));
   assert.match(error, /no máximo 10/);
 });
 
 test('exige 4 alternativas preenchidas e a correta entre A e D', () => {
-  assert.match(validateExamPayload({ ...base, questions: [{ ...multipleChoice, options: ['A', 'B', 'C'] }] }).error, /alternativas/);
-  assert.match(validateExamPayload({ ...base, questions: [{ ...multipleChoice, correctOption: 4 }] }).error, /correta/);
-});
-
-test('exige data final depois da data de início', () => {
-  const { error } = validateExamPayload({ ...base, endsAt: base.startsAt, questions: [open] });
-  assert.match(error, /data final/);
+  assert.match(validateQuestions([{ ...multipleChoice, options: ['A', 'B', 'C'] }]).error, /alternativas/);
+  assert.match(validateQuestions([{ ...multipleChoice, correctOption: 4 }]).error, /correta/);
 });
 
 test('considera o período e se a prova está ativa', () => {
@@ -76,6 +71,7 @@ test('prova do manual: ausente, texto inválido e sem perguntas', () => {
   assert.deepEqual(parseManualExam(''), { exam: null });
   assert.match(parseManualExam('{quebrado').error, /inválida/);
   assert.match(parseManualExam({ titulo: 'Sem perguntas', questions: [] }).error, /ao menos uma pergunta/);
+  assert.match(parseManualExam({ questions: [open] }).error, /título da prova/);
 });
 
 test('prova sem prazo final continua aberta depois de começar', () => {
@@ -83,11 +79,6 @@ test('prova sem prazo final continua aberta depois de começar', () => {
   assert.equal(isExamOpen(exam, new Date('2030-01-01T00:00:00Z')), true);
   assert.equal(isExamOpen(exam, new Date('2025-12-31T00:00:00Z')), false);
 });
-
-test('prova avulsa continua exigindo início e fim', () => {
-  assert.match(validateExamPayload({ titulo: 'Avulsa', questions: [open] }).error, /data de início/);
-});
-
 
 test('prova do manual: nunca tem prazo, mesmo se vier data final', () => {
   const soon = new Date(Date.now() + 20 * 1000).toISOString();
@@ -105,12 +96,14 @@ test('modelo de prova: exige título e perguntas válidas, sem período', () => 
   assert.equal(template.questions.length, 2);
 });
 
-test('para quem: colaboradores específicos exigem ao menos um; setor (padrão) ignora a lista', () => {
-  assert.match(parseAudience({ audience: 'colaboradores', userIds: [] }).error, /pelo menos um colaborador/);
-  assert.deepEqual(parseAudience({ audience: 'colaboradores', userIds: ['3', 3, 'x', 5] }).userIds, [3, 5]);
-  assert.deepEqual(parseAudience({ audience: 'setor', userIds: [3] }).userIds, []);
-  assert.deepEqual(parseAudience({ userIds: [3] }).userIds, []);
-  assert.match(validateExamPayload({ ...base, questions: [open], audience: 'colaboradores' }).error, /pelo menos um colaborador/);
-  assert.deepEqual(validateExamPayload({ ...base, questions: [open], audience: 'colaboradores', userIds: [7] }).exam.userIds, [7]);
-  assert.equal(validateExamPayload({ ...base, questions: [open], required: true }, { forManual: true }).exam.userIds, undefined);
+test('aplicar modelo: colaboradores específicos exigem ao menos um; setor ignora a lista', () => {
+  const period = { startsAt: base.startsAt, endsAt: base.endsAt };
+  assert.match(validateApplyPayload({ ...period, audience: 'colaboradores', userIds: [] }).error, /pelo menos um colaborador/);
+  assert.deepEqual(validateApplyPayload({ ...period, userIds: ['3', 3, 'x', 5] }).application.userIds, [3, 5]);
+  assert.deepEqual(validateApplyPayload({ ...period, audience: 'setor', userIds: [3] }).application.userIds, []);
+  const all = validateApplyPayload({ ...period, audience: 'todos', userIds: [3] }).application;
+  assert.equal(all.audience, 'todos');
+  assert.deepEqual(all.userIds, []);
+  assert.match(validateApplyPayload({ audience: 'setor' }).error, /data de início/);
+  assert.match(validateApplyPayload({ ...period, endsAt: base.startsAt, audience: 'setor' }).error, /data final/);
 });

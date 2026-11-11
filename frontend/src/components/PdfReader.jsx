@@ -64,7 +64,8 @@ export default function PdfReader({ url, initialPage = 1, onPageViewed }) {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    pdfjs.getDocument(url).promise.then((loaded) => {
+    // isEvalSupported: false impede o PDF.js de executar código gerado a partir do PDF (proteção contra PDF malicioso).
+    pdfjs.getDocument({ url, isEvalSupported: false }).promise.then((loaded) => {
       if (!active) return;
       setDocument(loaded);
       setPage(Math.min(Math.max(initialPage || 1, 1), loaded.numPages));

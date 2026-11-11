@@ -9,7 +9,7 @@ import { useToast } from '../context/ToastContext.jsx';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
 
-/** Permite ao suporte manter a lista de setores corporativos. */
+/** Permite ao admin e ao administrador de cadastros manter a lista de setores corporativos. */
 export default function Setores() {
   const { apiUrl, token } = useAuth();
   const [setores, setSetores] = useState([]);

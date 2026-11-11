@@ -1,10 +1,11 @@
 /**
- * Consultas e regras de visibilidade dos manuais por perfil, setor e sistema.
+ * Consultas e regras de visibilidade dos manuais por perfil, setor, unidade e sistema.
  * Mudanças nos WHERE afetam autorização; mudanças no CRUD afetam os registros persistidos.
  */
 import { query, withTransaction } from '../config/db.js';
-import { hasSector, seesAllSectors } from '../utils/access.js';
+import { hasSector, reachesUserUnits, seesAllSectors, seesAllUnits } from '../utils/access.js';
 import { insertExam } from './Exam.js';
+import { manualInUnits } from '../utils/unitSql.js';
 
 // Percentual do manual: média entre páginas lidas do PDF e vídeo assistido, contando só o que o manual tem
 // (um manual pode ter só PDF, só vídeo ou os dois).
@@ -17,7 +18,11 @@ const PROGRESS_PERCENT = `ROUND(100 * (
 // Um manual vale para um ou mais setores (tabela manual_sectors); manuals.sector_id guarda só o primeiro escolhido.
 const SECTOR_COLUMNS = `ARRAY(SELECT ms.sector_id FROM manual_sectors ms WHERE ms.manual_id = m.id ORDER BY ms.sector_id) AS sector_ids,
   ARRAY(SELECT s.nome FROM manual_sectors ms JOIN sectors s ON s.id = ms.sector_id
-        WHERE ms.manual_id = m.id ORDER BY s.nome) AS sector_names`;
+        WHERE ms.manual_id = m.id ORDER BY s.nome) AS sector_names,
+  ARRAY(SELECT mu.unit_id FROM manual_units mu WHERE mu.manual_id = m.id ORDER BY mu.unit_id) AS unit_ids,
+  ARRAY(SELECT un.nome FROM manual_units mu JOIN units un ON un.id = mu.unit_id
+        WHERE mu.manual_id = m.id ORDER BY un.nome) AS unit_names`;
+
 
 // Prova do manual (no máximo uma, pelo índice único em exams.manual_id) e a entrega do usuário nela.
 // exam_status nulo = ainda não fez; exam_open diz se a prova está ativa e dentro do prazo.
@@ -28,8 +33,10 @@ const examJoin = (userParam) => `LEFT JOIN LATERAL (
     FROM exams e WHERE e.manual_id = m.id) ex ON TRUE`;
 const EXAM_COLUMNS = 'ex.exam_id, ex.exam_required, ex.exam_open, ex.exam_status';
 
+// Admin e editor de conteúdo veem todos os manuais (inclusive inativos). Os demais, os ativos dos seus setores
+// que sejam das suas unidades ou de todas as unidades.
 export async function listManualsForUser(user, systemId = null) {
-  if (seesAllSectors(user)) {
+  if (seesAllSectors(user) && seesAllUnits(user)) {
     const { rows } = await query(
       `SELECT m.*, u.nome AS criado_por_nome, mp.first_access_at, mp.completed_at,
               ${PROGRESS_PERCENT}, ${SECTOR_COLUMNS}, ${EXAM_COLUMNS}
@@ -49,22 +56,24 @@ export async function listManualsForUser(user, systemId = null) {
      LEFT JOIN manual_progress mp ON mp.manual_id = m.id AND mp.user_id = $3
      ${examJoin('$3')}
      WHERE ($2::int IS NULL OR m.system_id = $2) AND m.active = TRUE
-       AND EXISTS (SELECT 1 FROM manual_sectors ms WHERE ms.manual_id = m.id AND ms.sector_id = ANY($1::int[]))
+       AND ($4::boolean OR EXISTS (SELECT 1 FROM manual_sectors ms WHERE ms.manual_id = m.id AND ms.sector_id = ANY($1::int[])))
+       AND ($5::boolean OR ${manualInUnits('$6')})
      ORDER BY m.created_at DESC`,
-    [user.sector_ids, systemId, user.id]
+    [user.sector_ids || [], systemId, user.id, seesAllSectors(user), seesAllUnits(user), user.unit_ids || []]
   );
   return rows;
 }
 
-// Protege a abertura direta de um manual com a mesma regra de setores da listagem.
+// Protege a abertura direta de um manual com a mesma regra de setores e unidades da listagem.
 export async function getManualForUser(id, user) {
   const { rows } = await query(
     `SELECT m.*, u.nome AS criado_por_nome, ${SECTOR_COLUMNS}, ${EXAM_COLUMNS} FROM manuals m
      LEFT JOIN users u ON u.id = m.criado_por ${examJoin('$2')} WHERE m.id = $1`, [id, user?.id || null]
   );
   const manual = rows[0];
-  if (!manual || seesAllSectors(user)) return manual;
-  return manual.active && manual.sector_ids.some((sectorId) => hasSector(user, sectorId)) ? manual : null;
+  if (!manual || (seesAllSectors(user) && seesAllUnits(user))) return manual;
+  const sectorOk = seesAllSectors(user) || manual.sector_ids.some((sectorId) => hasSector(user, sectorId));
+  return manual.active && sectorOk && reachesUserUnits(user, manual.unit_ids) ? manual : null;
 }
 
 // Troca a lista de setores do manual; quem tem qualquer um deles passa a ver o manual.
@@ -76,8 +85,19 @@ async function replaceManualSectors(execute, manualId, sectorIds) {
   );
 }
 
-// Cria o manual já ligado a um ou mais setores e, se vier, a prova do manual, tudo na mesma transação.
-export async function createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, criadoPor, exam = null }) {
+// Troca as unidades do manual; lista vazia = todas as unidades.
+async function replaceManualUnits(execute, manualId, unitIds) {
+  await execute('DELETE FROM manual_units WHERE manual_id = $1', [manualId]);
+  if (unitIds.length) {
+    await execute(
+      'INSERT INTO manual_units (manual_id, unit_id) SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING',
+      [manualId, unitIds]
+    );
+  }
+}
+
+// Cria o manual já ligado a um ou mais setores, às unidades (vazio = todas) e, se vier, à prova do manual, numa transação.
+export async function createManual({ titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, unitIds = [], criadoPor, exam = null }) {
   return withTransaction(async (client) => {
     const execute = client.query.bind(client);
     const { rows } = await execute(
@@ -86,13 +106,15 @@ export async function createManual({ titulo, descricao, pdfUrl, videoUrl, system
       [titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds[0], criadoPor]
     );
     await replaceManualSectors(execute, rows[0].id, sectorIds);
+    await replaceManualUnits(execute, rows[0].id, unitIds);
     const createdExam = exam ? await insertExam(execute, { ...exam, manualId: rows[0].id, criadoPor }) : null;
-    return { ...rows[0], sector_ids: sectorIds, exam_id: createdExam?.id || null, exam_required: createdExam?.required ?? null };
+    return { ...rows[0], sector_ids: sectorIds, unit_ids: unitIds, exam_id: createdExam?.id || null, exam_required: createdExam?.required ?? null };
   });
 }
 
 // removePdf/removeVideo tiram o arquivo do manual sem criar versão: o progresso na parte que fica é mantido.
-async function executeManualUpdate(execute, id, { titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, active, removePdf = false, removeVideo = false }) {
+// unitIds undefined mantém as unidades; [] passa o manual para todas as unidades.
+async function executeManualUpdate(execute, id, { titulo, descricao, pdfUrl, videoUrl, systemId, sectorIds, unitIds, active, removePdf = false, removeVideo = false }) {
   const hasSystemId = systemId !== undefined;
   const hasSectorId = sectorIds !== undefined;
   const { rows } = await execute(
@@ -108,6 +130,7 @@ async function executeManualUpdate(execute, id, { titulo, descricao, pdfUrl, vid
     [titulo, descricao, pdfUrl, videoUrl, hasSystemId, systemId || null, hasSectorId, sectorIds?.[0] || null, active, id, Boolean(removePdf), Boolean(removeVideo)]
   );
   if (rows[0] && hasSectorId) await replaceManualSectors(execute, id, sectorIds);
+  if (rows[0] && unitIds !== undefined) await replaceManualUnits(execute, id, unitIds);
   if (rows[0] && (removePdf || removeVideo)) await completeProgressAfterRemoval(execute, id);
   return rows[0];
 }
@@ -129,18 +152,21 @@ export async function updateManual(id, data) {
   return withTransaction((client) => executeManualUpdate(client.query.bind(client), id, data));
 }
 
-// Tela Gerenciar manuais: ativos e inativos. Gerente de setor recebe só os manuais cujos setores são todos seus.
+// Tela Gerenciar manuais: ativos e inativos. Gerente de setor recebe só os manuais cujos setores são todos seus
+// e cujas unidades são todas suas (ou que valem para todas as unidades).
 export async function listManageableManuals(user) {
   const { rows } = await query(
     `SELECT m.id, m.titulo, m.descricao, m.system_id, sy.nome AS system_name, m.active, m.version,
             m.pdf_url IS NOT NULL AS has_pdf, m.video_url IS NOT NULL AS has_video,
             m.created_at, m.updated_at, u.nome AS criado_por_nome, ${SECTOR_COLUMNS}
      FROM manuals m LEFT JOIN users u ON u.id = m.criado_por LEFT JOIN systems sy ON sy.id = m.system_id
-     WHERE NOT $1::boolean OR (
+     WHERE (NOT $1::boolean OR (
        EXISTS (SELECT 1 FROM manual_sectors ms WHERE ms.manual_id = m.id)
        AND NOT EXISTS (SELECT 1 FROM manual_sectors ms WHERE ms.manual_id = m.id AND NOT (ms.sector_id = ANY($2::int[]))))
+     ) AND (NOT $3::boolean OR
+       NOT EXISTS (SELECT 1 FROM manual_units mu WHERE mu.manual_id = m.id AND NOT (mu.unit_id = ANY($4::int[]))))
      ORDER BY m.titulo`,
-    [!seesAllSectors(user), user.sector_ids || []]
+    [!seesAllSectors(user), user.sector_ids || [], !seesAllUnits(user), user.unit_ids || []]
   );
   return rows;
 }
@@ -149,7 +175,8 @@ export async function listManageableManuals(user) {
 export async function getManualSectorIds(id) {
   const { rows } = await query(
     `SELECT m.id, m.titulo, m.pdf_url, m.video_url,
-            ARRAY(SELECT ms.sector_id FROM manual_sectors ms WHERE ms.manual_id = m.id) AS sector_ids
+            ARRAY(SELECT ms.sector_id FROM manual_sectors ms WHERE ms.manual_id = m.id) AS sector_ids,
+            ARRAY(SELECT mu.unit_id FROM manual_units mu WHERE mu.manual_id = m.id) AS unit_ids
      FROM manuals m WHERE m.id = $1`, [id]
   );
   return rows[0] || null;
@@ -165,16 +192,13 @@ export async function isFileReferenced(value) {
   return rows[0].used;
 }
 
+/** Exclui o manual; setores, unidades, progresso, prova e histórico saem junto (ON DELETE CASCADE). */
 export async function deleteManual(id) {
   await query('DELETE FROM manuals WHERE id = $1', [id]);
 }
 
-export async function archiveCurrentVersion(id) {
-  return withTransaction(async (client) => {
-    await archiveVersionWith(client.query.bind(client), id);
-  });
-}
-
+// Guarda a versão atual (arquivos e progresso dos colaboradores) no histórico e zera o progresso,
+// porque o conteúdo novo precisa ser lido de novo.
 async function archiveVersionWith(execute, id) {
   await execute(
     `INSERT INTO manual_version_history (manual_id, version, titulo, descricao, pdf_url, video_url)

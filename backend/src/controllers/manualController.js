@@ -17,12 +17,14 @@ import { confirmDirectUpload, deleteStoredFile, resolveFileUrl, supportsDirectUp
 import { ALLOWED_TYPES, maxBytesFor } from '../middleware/upload.js';
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import { findOrCreateSector, findSectorsByIds, listSectors } from '../models/Sector.js';
-import { canManageManual, hasSector, parseSectorIds } from '../utils/access.js';
+import { findUnitsByIds } from '../models/Unit.js';
+import { can, canManageManual, canPublishToUnits, hasSector, parseSectorIds, parseUnitIds, PERMISSIONS, seesAllSectors } from '../utils/access.js';
 import { audit } from '../models/Audit.js';
 import { parseManualExam } from '../utils/exam.js';
 import { getTemplate } from '../models/ExamTemplate.js';
 import { canUseTemplate } from './examTemplateController.js';
 
+// O manual tem arquivo novo deste tipo na requisição? (enviado pelo backend ou direto ao bucket)
 const hasFile = (req, kind) => Boolean(req.files?.[kind]?.[0] || req.body?.[`${kind}Key`]);
 // removePdf/removeVideo chegam como true (JSON) ou "true" (multipart).
 const isTrue = (value) => value === true || value === 'true';
@@ -42,8 +44,9 @@ async function receiveFile(req, kind) {
 }
 
 /**
- * Setores do manual (um ou mais, em sectorIds). Gerente de setor só publica nos seus; suporte e editor de conteúdo
- * em qualquer setor já cadastrado. O campo antigo "setor" (um nome) continua aceito; nele só o suporte cria setor novo.
+ * Setores do manual (um ou mais, em sectorIds). Quem não enxerga todos os setores (gerente de setor) só publica nos seus;
+ * admin e editor de conteúdo em qualquer setor já cadastrado. O campo antigo "setor" (um nome) continua aceito;
+ * nele só quem cadastra setores (admin) cria setor novo.
  */
 async function resolveManualSectors(req) {
   let ids = parseSectorIds(req.body.sectorIds);
@@ -51,16 +54,31 @@ async function resolveManualSectors(req) {
   if (!ids.length && setor) {
     const existing = (await listSectors()).find((item) => item.nome.toLowerCase() === setor.toLowerCase());
     if (existing) ids = [existing.id];
-    else if (req.user.role === 'suporte') ids = [(await findOrCreateSector(setor)).id];
-    else return { error: 'Setor não encontrado. Peça ao suporte para cadastrá-lo em Setores.' };
+    else if (can(req.user, PERMISSIONS.MANAGE_SECTORS)) ids = [(await findOrCreateSector(setor)).id];
+    else return { error: 'Setor não encontrado. Peça ao administrador para cadastrá-lo em Setores.' };
   }
   // Gerente com um único setor não precisa escolher.
-  if (!ids.length && req.user.role === 'gerente_setor' && req.user.sector_ids?.length === 1) ids = [...req.user.sector_ids];
+  if (!ids.length && !seesAllSectors(req.user) && req.user.sector_ids?.length === 1) ids = [...req.user.sector_ids];
   if (!ids.length) return { error: 'Selecione pelo menos um setor' };
   if ((await findSectorsByIds(ids)).length !== ids.length) return { error: 'Setor não encontrado' };
-  if (req.user.role === 'gerente_setor' && !ids.every((id) => hasSector(req.user, id))) {
+  if (!seesAllSectors(req.user) && !ids.every((id) => hasSector(req.user, id))) {
     return { error: 'Você só pode publicar manuais nos seus setores' };
   }
+  return { ids };
+}
+
+/**
+ * Unidades do manual. unitScope "todas" (ou nenhuma unidade enviada no cadastro) = todas as unidades (lista vazia);
+ * "selecionadas" exige pelo menos uma em unitIds. Na edição, sem unitScope nem unitIds as unidades não mudam
+ * (devolve { ids: undefined }). Gerente de setor escolhe entre as suas unidades ou todas as unidades.
+ */
+async function resolveManualUnits(req, { isUpdate = false } = {}) {
+  const scope = req.body.unitScope;
+  if (isUpdate && scope === undefined && req.body.unitIds === undefined) return { ids: undefined };
+  const ids = scope === 'todas' ? [] : parseUnitIds(req.body.unitIds);
+  if (scope === 'selecionadas' && !ids.length) return { error: 'Selecione pelo menos uma unidade ou marque todas as unidades' };
+  if (ids.length && (await findUnitsByIds(ids)).length !== ids.length) return { error: 'Unidade não encontrada' };
+  if (!canPublishToUnits(req.user, ids)) return { error: 'Você só pode publicar manuais nas suas unidades' };
   return { ids };
 }
 
@@ -83,8 +101,8 @@ async function findManageableManual(req, res) {
     res.status(404).json({ message: 'Manual nao encontrado' });
     return null;
   }
-  if (!canManageManual(req.user, manual.sector_ids)) {
-    res.status(403).json({ message: 'Você só pode alterar manuais que sejam apenas dos seus setores' });
+  if (!canManageManual(req.user, manual.sector_ids, manual.unit_ids || [])) {
+    res.status(403).json({ message: 'Você só pode alterar manuais que sejam apenas dos seus setores e das suas unidades' });
     return null;
   }
   return manual;
@@ -114,8 +132,15 @@ async function withFileUrls(manual) {
 }
 
 
+// Tamanho máximo do título (mesmo de manuals.titulo VARCHAR(180) no schema.sql).
+const MAX_TITLE_LENGTH = 180;
+
+/** Texto opcional vindo da tela: só aceita string; vazio vira null. */
+const optionalText = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+
+/** Lista os manuais que o usuário pode ler (filtro opcional por sistema em ?systemId=). */
 export async function index(req, res) {
-  const systemId = req.query.systemId || null;
+  const systemId = Number(req.query.systemId) > 0 ? Number(req.query.systemId) : null;
   let manuals;
   try {
     manuals = await listManualsForUser(req.user, systemId);
@@ -142,6 +167,7 @@ export async function manage(req, res) {
   res.json(manuals);
 }
 
+/** Abre um manual (se o usuário tem acesso) com os endereços dos arquivos prontos para o navegador. */
 export async function show(req, res) {
   let manual;
   try {
@@ -161,15 +187,20 @@ export async function show(req, res) {
   res.json(await withFileUrls(manual));
 }
 
+/** Cadastra um manual novo (PDF e/ou vídeo, setores, unidades e, se vier, a prova do manual). */
 export async function store(req, res) {
-  const { titulo, descricao } = req.body;
-  const systemId = req.body.systemId ? Number(req.body.systemId) : null;
+  const titulo = optionalText(req.body.titulo);
+  const descricao = optionalText(req.body.descricao);
+  const systemId = Number(req.body.systemId) > 0 ? Number(req.body.systemId) : null;
 
   if (!titulo || !systemId) {
     return res.status(400).json({ message: 'Sistema e título são obrigatórios' });
   }
+  if (titulo.length > MAX_TITLE_LENGTH) return res.status(400).json({ message: `O título pode ter até ${MAX_TITLE_LENGTH} caracteres` });
   const sectors = await resolveManualSectors(req);
   if (sectors.error) return res.status(400).json({ message: sectors.error });
+  const units = await resolveManualUnits(req);
+  if (units.error) return res.status(400).json({ message: units.error });
   // O manual pode ter só PDF, só vídeo ou os dois.
   if (!hasFile(req, 'pdf') && !hasFile(req, 'video')) {
     return res.status(400).json({ message: 'Envie pelo menos o PDF ou o vídeo' });
@@ -194,6 +225,7 @@ export async function store(req, res) {
       videoUrl,
       systemId,
       sectorIds: sectors.ids,
+      unitIds: units.ids,
       criadoPor: req.user.id,
       exam
     });
@@ -209,6 +241,7 @@ export async function store(req, res) {
       videoUrl,
       systemId,
       sectorIds: sectors.ids,
+      unitIds: units.ids,
       criadoPor: req.user.id,
       exam
     });
@@ -218,19 +251,24 @@ export async function store(req, res) {
   res.status(201).json(manual);
 }
 
+/** Edita o manual: dados, setores, unidades, ativo/inativo e troca ou remoção de arquivos. */
 export async function update(req, res) {
   const current = await findManageableManual(req, res);
   if (!current) return;
-  const { titulo, descricao } = req.body;
+  // undefined = campo não enviado (não muda). Título enviado vazio é recusado; descrição vazia apaga a descrição.
+  const titulo = req.body.titulo === undefined ? undefined : optionalText(req.body.titulo);
+  const descricao = req.body.descricao === undefined ? undefined : (optionalText(req.body.descricao) ?? '');
+  if (titulo === null) return res.status(400).json({ message: 'O título não pode ficar vazio' });
+  if (titulo && titulo.length > MAX_TITLE_LENGTH) return res.status(400).json({ message: `O título pode ter até ${MAX_TITLE_LENGTH} caracteres` });
   const active = req.body.active === undefined ? undefined : String(req.body.active) === 'true';
-  const systemId = req.body.systemId === undefined
-    ? undefined
-    : req.body.systemId
-      ? Number(req.body.systemId)
-      : null;
+  // Sistema: undefined mantém; um id válido troca. O sistema é obrigatório, então valor inválido é recusado.
+  const systemId = req.body.systemId === undefined ? undefined : Number(req.body.systemId) > 0 ? Number(req.body.systemId) : null;
+  if (systemId === null) return res.status(400).json({ message: 'Escolha o sistema do manual' });
   // Setores só mudam quando vierem na requisição (sectorIds ou o campo antigo setor).
   const sectors = req.body.sectorIds !== undefined || req.body.setor ? await resolveManualSectors(req) : null;
   if (sectors?.error) return res.status(400).json({ message: sectors.error });
+  const units = await resolveManualUnits(req, { isUpdate: true });
+  if (units.error) return res.status(400).json({ message: units.error });
   // Remover só vale para o arquivo que o manual tem; não dá para remover e trocar o mesmo arquivo na mesma edição.
   const removePdf = isTrue(req.body.removePdf) && Boolean(current.pdf_url);
   const removeVideo = isTrue(req.body.removeVideo) && Boolean(current.video_url);
@@ -254,6 +292,7 @@ export async function update(req, res) {
       videoUrl,
       systemId,
       sectorIds: sectors?.ids,
+      unitIds: units.ids,
       active,
       removePdf,
       removeVideo
@@ -273,6 +312,7 @@ export async function update(req, res) {
       videoUrl,
       systemId,
       sectorIds: sectors?.ids,
+      unitIds: units.ids,
       active,
       removePdf,
       removeVideo

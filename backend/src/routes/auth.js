@@ -1,7 +1,8 @@
 /** Endpoints de sessão; altere caminhos/middlewares aqui e a lógica em authController.js. */
 import { Router } from 'express';
 import { changePassword, login, me, registerManagerUser } from '../controllers/authController.js';
-import { authenticate, requireSupport } from '../middleware/auth.js';
+import { authenticate, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../utils/access.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 
 const router = Router();
@@ -9,6 +10,6 @@ const router = Router();
 router.post('/login', asyncHandler(login));
 router.get('/me', authenticate, asyncHandler(me));
 router.put('/password', authenticate, asyncHandler(changePassword));
-router.post('/register', authenticate, requireSupport, asyncHandler(registerManagerUser));
+router.post('/register', authenticate, requirePermission(PERMISSIONS.MANAGE_USERS), asyncHandler(registerManagerUser));
 
 export default router;

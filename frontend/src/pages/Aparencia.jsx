@@ -1,5 +1,5 @@
 /**
- * Aparência (white label): o suporte troca as cores da sidebar, dos menus, dos botões e dos títulos e as logos.
+ * Aparência (white label): o admin troca as cores da sidebar, dos menus, dos botões e dos títulos e as logos.
  * As mudanças aparecem ao vivo no site inteiro enquanto a tela está aberta e só valem para todos depois de salvar.
  */
 import { useEffect, useState } from 'react';

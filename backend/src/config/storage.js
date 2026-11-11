@@ -7,22 +7,33 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
+import { randomUUID as uuid } from 'crypto';
 import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
-import { v4 as uuid } from 'uuid';
 import * as objectStorage from './objectStorage.js';
 
+// Pasta deste arquivo (ESM não tem __dirname pronto); usada para achar backend/uploads.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Configuração do modo legado Supabase (vazia nos outros modos).
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseBucket = process.env.SUPABASE_BUCKET || 'manuals';
 
+// Modo de armazenamento: o informado em STORAGE_DRIVER ou, sem ele, detectado pelas variáveis presentes.
 export const storageDriver = process.env.STORAGE_DRIVER
   || (process.env.S3_BUCKET ? 's3' : supabaseUrl && supabaseKey ? 'supabase' : 'local');
 
-const supabase = storageDriver === 'supabase' ? createClient(supabaseUrl, supabaseKey) : null;
+// Cliente do Supabase criado só quando esse modo é usado: o pacote é pesado e os outros modos não precisam dele.
+let supabaseClient = null;
+async function getSupabase() {
+  if (storageDriver !== 'supabase') return null;
+  if (!supabaseClient) {
+    const { createClient } = await import('@supabase/supabase-js');
+    supabaseClient = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabaseClient;
+}
 
 /** Só o bucket S3 recebe o arquivo direto do navegador; os outros modos usam o envio pelo backend. */
 export const supportsDirectUpload = storageDriver === 's3';
@@ -42,23 +53,28 @@ export function sanitizePdfBuffer(buffer) {
 
 /** Grava um arquivo recebido pelo backend e devolve o valor salvo no banco (chave, URL pública ou caminho local). */
 export async function uploadFile(file, folder) {
-  const extension = path.extname(file.originalname);
+  // A extensão vem do tipo já validado (application/pdf, video/mp4...), nunca do nome enviado pelo navegador:
+  // assim ninguém grava um ".html" disfarçado de PDF que o servidor entregaria como página.
+  const extension = objectStorage.EXTENSIONS[file.mimetype] || '';
   const isPdf = file.mimetype === 'application/pdf';
-  // Só o PDF é lido inteiro, para remover o comando de impressão automática.
-  const pdfBuffer = isPdf ? sanitizePdfBuffer(await fs.readFile(file.path)) : null;
+  // Só o PDF é lido inteiro, para conferir que é mesmo PDF e remover o comando de impressão automática.
+  const pdfBuffer = isPdf ? await fs.readFile(file.path) : null;
+  if (pdfBuffer && pdfBuffer.subarray(0, 5).toString('latin1') !== '%PDF-') throw httpError(400, 'O arquivo enviado não é um PDF válido');
+  const cleanPdf = pdfBuffer ? sanitizePdfBuffer(pdfBuffer) : null;
 
   if (storageDriver === 's3') {
     const key = objectStorage.newObjectKey(isPdf ? 'pdf' : 'video', file.mimetype);
-    if (pdfBuffer) await objectStorage.writeObject(key, pdfBuffer, file.mimetype, pdfBuffer.length);
+    if (cleanPdf) await objectStorage.writeObject(key, cleanPdf, file.mimetype, cleanPdf.length);
     else await objectStorage.writeObjectFromFile(key, file.path, file.size, file.mimetype);
     return key;
   }
 
+  const supabase = await getSupabase();
   if (supabase) {
     const fileName = `${folder}/${uuid()}${extension}`;
     const { error } = await supabase.storage
       .from(supabaseBucket)
-      .upload(fileName, pdfBuffer || await fs.readFile(file.path), {
+      .upload(fileName, cleanPdf || await fs.readFile(file.path), {
         contentType: file.mimetype,
         upsert: false
       });
@@ -75,7 +91,7 @@ export async function uploadFile(file, folder) {
   await fs.mkdir(uploadsDir, { recursive: true });
   const diskName = `${uuid()}${extension}`;
   const diskPath = path.join(uploadsDir, diskName);
-  if (pdfBuffer) await fs.writeFile(diskPath, pdfBuffer);
+  if (cleanPdf) await fs.writeFile(diskPath, cleanPdf);
   else await fs.copyFile(file.path, diskPath);
 
   return `/uploads/${folder}/${diskName}`;
@@ -133,11 +149,13 @@ export async function deleteStoredFile(value) {
   }
   const marker = `/storage/v1/object/public/${supabaseBucket}/`;
   const position = String(value).indexOf(marker);
-  if (supabase && position >= 0) {
+  const supabase = position >= 0 ? await getSupabase() : null;
+  if (supabase) {
     await supabase.storage.from(supabaseBucket).remove([decodeURIComponent(value.slice(position + marker.length))]);
   }
 }
 
+/** Erro com status HTTP: o tratador de app.js devolve a mensagem para a tela com esse status. */
 function httpError(status, message) {
   return Object.assign(new Error(message), { status });
 }

@@ -1,5 +1,5 @@
 /**
- * Formulário de upload e vínculo do manual com sistema e um ou mais setores.
+ * Formulário de upload e vínculo do manual com sistema, um ou mais setores e as unidades (todas ou algumas).
  * Alterar nomes dos campos exige sincronizar middleware/upload.js e manualController.js.
  * Opcionalmente cadastra a prova do manual (campo exam, em JSON), liberada quando o colaborador conclui 100% do conteúdo:
  * obrigatória (ele faz na hora) ou não obrigatória (ele pode deixar para depois).
@@ -8,16 +8,17 @@ import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { ROLES } from '../constants/roles.js';
+import { can, PERMISSIONS } from '../constants/roles.js';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import BackButton from '../components/BackButton.jsx';
 import SectorPicker from '../components/SectorPicker.jsx';
+import UnitScopePicker, { ALL_UNITS_SCOPE } from '../components/UnitScopePicker.jsx';
 import { MAX_PDF_MB, MAX_VIDEO_MB, MAX_VIDEO_MINUTES, validateManualFile } from '../constants/uploads.js';
 import { buildManualRequest, getUploadConfig } from '../utils/directUpload.js';
 import ExamQuestionsEditor, { newQuestion, serializeQuestions } from '../components/ExamQuestionsEditor.jsx';
 import TemplatePicker from '../components/TemplatePicker.jsx';
 
-const INITIAL_FORM = { systemId: '', titulo: '', descricao: '', sectorIds: [], pdf: null, video: null };
+const INITIAL_FORM = { systemId: '', titulo: '', descricao: '', sectorIds: [], ...ALL_UNITS_SCOPE, pdf: null, video: null };
 const INITIAL_EXAM = { enabled: false, required: true, titulo: '', descricao: '', templateId: null };
 
 /** Prova do manual no formato do backend; sem título próprio, usa "Prova - <título do manual>". Não tem prazo: fica disponível até o colaborador fazer. */
@@ -36,6 +37,7 @@ export default function CriarManual() {
   const { apiUrl, token, user } = useAuth();
   const [systems, setSystems] = useState([]);
   const [sectors, setSectors] = useState([]);
+  const [units, setUnits] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [exam, setExam] = useState(INITIAL_EXAM);
   const [questions, setQuestions] = useState([newQuestion()]);
@@ -44,19 +46,22 @@ export default function CriarManual() {
   const [sending, setSending] = useState('');
   // Trocar a chave recria o formulário e limpa os campos de arquivo depois de um cadastro.
   const [formKey, setFormKey] = useState(0);
-  const isSectorManager = user?.role === ROLES.SECTOR_MANAGER;
-  // O manual pode valer para vários setores: gerente escolhe entre os seus; suporte e editor, entre todos.
+  const isSectorManager = !can(user, PERMISSIONS.ALL_SECTORS);
+  // O manual pode valer para vários setores: gerente escolhe entre os seus; admin e editor, entre todos.
   const sectorOptions = isSectorManager ? user?.setores || [] : sectors;
   const fixedSector = isSectorManager && sectorOptions.length <= 1;
+  // Unidades: gerente escolhe entre as suas (ou todas as unidades); admin e editor, entre todas as cadastradas.
+  const unitOptions = can(user, PERMISSIONS.ALL_UNITS) ? units : user?.unidades || [];
 
   useEffect(() => {
     async function loadOptions() {
       const headers = createAuthHeaders(token);
-      const [systemsResponse, sectorsResponse] = await Promise.all([
-        fetch(`${apiUrl}/api/systems`, { headers }), fetch(`${apiUrl}/api/sectors`, { headers })
+      const [systemsResponse, sectorsResponse, unitsResponse] = await Promise.all([
+        fetch(`${apiUrl}/api/systems`, { headers }), fetch(`${apiUrl}/api/sectors`, { headers }), fetch(`${apiUrl}/api/units`, { headers })
       ]);
       setSystems(await readResponse(systemsResponse));
       setSectors(await readResponse(sectorsResponse));
+      setUnits(await readResponse(unitsResponse));
       setDirectUpload(Boolean((await getUploadConfig(apiUrl, token)).directUpload));
     }
     loadOptions().catch((error) => toast.error(error.message));
@@ -79,6 +84,10 @@ export default function CriarManual() {
     event.preventDefault();
     if (!fixedSector && !form.sectorIds.length) {
       toast.error('Selecione pelo menos um setor.');
+      return;
+    }
+    if (form.unitScope === 'selecionadas' && !form.unitIds.length) {
+      toast.error('Selecione pelo menos uma unidade ou marque Todas as unidades.');
       return;
     }
     if (!form.pdf && !form.video) {
@@ -110,6 +119,7 @@ export default function CriarManual() {
         <SectorPicker sectors={sectorOptions} value={form.sectorIds} onChange={(value) => setForm({ ...form, sectorIds: value })} allLabel={isSectorManager ? 'Todos os meus setores' : 'Todos os setores'} />
         <span className="hint">O manual aparece para quem for de qualquer um dos setores marcados.</span>
       </fieldset>}
+      <UnitScopePicker units={unitOptions} totalUnits={units.length} value={form} onChange={(scope) => setForm({ ...form, ...scope })} />
       <label>Título<input value={form.titulo} onChange={(event) => setForm({ ...form, titulo: event.target.value })} required /></label>
       <label>Descrição<textarea value={form.descricao} onChange={(event) => setForm({ ...form, descricao: event.target.value })} /></label>
       <label>PDF<input type="file" accept="application/pdf" onChange={(event) => chooseFile('pdf', event.target)} /><span className="hint">Até {MAX_PDF_MB} MB.</span></label>

@@ -16,8 +16,8 @@ Toda a documentação está em [`docs/`](docs/Indice-da-Documentacao.pdf), organ
 ## Recursos
 
 - Login com JWT por identificador textual (não exige e-mail).
-- Perfis: suporte (administração geral), gerente de setor e usuário comum (operador).
-- Suporte cadastra sistemas, setores, usuários e manuais; gerente de setor publica manuais no próprio setor.
+- Perfis: Admin (acesso total), Administrador de cadastros (usuários, setores e sistemas), Editor de conteúdo,
+  Gestor de área, Gerente de setor e Usuário comum. Permissões de cada um em [docs/Geral/Perfis-de-Acesso.md](docs/Geral/Perfis-de-Acesso.md).
 - Cada manual (PDF + vídeo) é vinculado a um sistema e a um setor.
 - Usuários pertencem a setores e visualizam apenas os manuais do seu setor.
 - Painel gerencial com conclusão por manual e detalhamento por operador.

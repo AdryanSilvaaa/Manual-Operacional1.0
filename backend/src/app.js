@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import manualRoutes from './routes/manuals.js';
 import sectorRoutes from './routes/sectors.js';
+import unitRoutes from './routes/units.js';
 import systemRoutes from './routes/systems.js';
 import userRoutes from './routes/users.js';
 import progressRoutes from './routes/progress.js';
@@ -26,18 +27,41 @@ const frontendDirectory = path.join(currentDirectory, '..', '..', 'frontend', 'd
 
 const app = express();
 
+// Não revela que o servidor é Express (dificulta a vida de quem procura falhas conhecidas).
 app.disable('x-powered-by');
 // Atrás do balanceador do Google Cloud, req.ip passa a ser o IP real do usuário (usado no bloqueio de login).
 app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 // Compacta JSON e textos (o relatório do Painel de Uso cai para cerca de 1/10 do tamanho). Vídeos e PDFs não são recompactados.
 app.use(compression());
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+
+// Cabeçalhos de segurança aplicados a todas as respostas (sem depender de biblioteca extra):
+// - nosniff: o navegador não "adivinha" o tipo do arquivo (um PDF não vira HTML executável);
+// - X-Frame-Options/frame-ancestors: o sistema não pode ser aberto dentro de iframe de outro site (clickjacking);
+// - Referrer-Policy: não vaza o endereço completo das telas para sites externos;
+// - HSTS (só em produção, atrás de HTTPS): o navegador passa a usar sempre HTTPS.
+app.use((request, response, next) => {
+  response.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+  });
+  if (process.env.NODE_ENV === 'production') response.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
+
+// Só os endereços do frontend listados em FRONTEND_URL (separados por vírgula) podem chamar a API pelo navegador.
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map((origin) => origin.trim()).filter(Boolean);
+app.use(cors({ origin: allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins }));
 // A aparência leva as logos (até 512 KB cada) no próprio JSON; por isso tem limite maior e vem antes do parser geral.
 app.use('/api/branding', express.json({ limit: '2mb' }), brandingRoutes);
 app.use(express.json({ limit: '1mb' }));
 // Os arquivos enviados têm nome único (uuid), então o navegador pode guardá-los em cache sem revalidar.
-app.use('/uploads', express.static(uploadsDirectory, { maxAge: '7d', immutable: true }));
+// dotfiles/index: não entrega arquivos ocultos nem lista pastas.
+app.use('/uploads', express.static(uploadsDirectory, { maxAge: '7d', immutable: true, dotfiles: 'deny', index: false }));
 
+// Vivacidade: responde 200 sempre que o processo está de pé (não consulta o banco).
 app.get('/health', (request, response) => {
   response.json({ status: 'ok', service: 'Prumo API' });
 });
@@ -54,11 +78,13 @@ app.get('/health/ready', async (request, response) => {
   }
 });
 
+// Rotas da API, uma por assunto. Cada arquivo em routes/ define autenticação e permissão de cada endpoint.
 app.use('/api/auth', authRoutes);
 app.use('/api/systems', systemRoutes);
 app.use('/api/manuals', manualRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sectors', sectorRoutes);
+app.use('/api/units', unitRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/exam-templates', examTemplateRoutes);
@@ -75,6 +101,7 @@ if (process.env.SERVE_FRONTEND === 'true') {
   });
 }
 
+// Qualquer endereço não atendido acima.
 app.use((request, response) => {
   response.status(404).json({ message: 'Rota não encontrada' });
 });
@@ -83,9 +110,11 @@ app.use((request, response) => {
 const DUPLICATE_MESSAGES = {
   idx_users_identificador_unique: 'Já existe um usuário com este login',
   users_email_key: 'Já existe um usuário com este e-mail',
-  sectors_nome_key: 'Já existe um setor com este nome'
+  sectors_nome_key: 'Já existe um setor com este nome',
+  idx_units_nome_unique: 'Já existe uma unidade com esse nome'
 };
 
+// Tratador final de erros: transforma erros conhecidos em mensagens claras e esconde detalhes internos.
 app.use((error, request, response, next) => {
   console.error(error);
   const databaseUnavailable = ['28P01', 'ECONNREFUSED', '3D000'].includes(error?.code);
@@ -96,12 +125,20 @@ app.use((error, request, response, next) => {
   if (error?.code === '23503') {
     return response.status(409).json({ message: 'Não é possível concluir: o registro está ligado a outros dados' });
   }
+  // 22P02: texto onde o banco esperava número (ex.: /api/manuals/abc). 22001: texto maior que a coluna.
+  if (error?.code === '22P02') return response.status(400).json({ message: 'Identificador inválido' });
+  if (error?.code === '22001') return response.status(400).json({ message: 'Um dos campos passa do tamanho permitido' });
+  // Corpo JSON malformado ou grande demais (erros do express.json).
+  if (error?.type === 'entity.parse.failed') return response.status(400).json({ message: 'Dados enviados em formato inválido' });
+  if (error?.type === 'entity.too.large') return response.status(413).json({ message: 'Dados enviados maiores que o permitido' });
 
-  response.status(error.status || 500).json({
-    message: databaseUnavailable
-      ? 'Banco de dados indisponível ou credenciais incorretas'
-      : error.message || 'Erro interno do servidor'
-  });
+  if (databaseUnavailable) {
+    return response.status(503).json({ message: 'Banco de dados indisponível ou credenciais incorretas' });
+  }
+  // Erros com status definido pelo próprio código (400, 403, 404, 413...) mostram a mensagem escrita para o usuário.
+  // Os demais (500) são falhas inesperadas: a mensagem técnica fica só no log, nunca na resposta.
+  const status = Number(error?.status) || 500;
+  response.status(status).json({ message: status < 500 ? error.message : 'Erro interno do servidor' });
 });
 
 export default app;

@@ -1,6 +1,6 @@
 /**
  * Aparência da aplicação (white label). A leitura é pública porque a tela de login já usa as cores e a logo;
- * só o suporte grava.
+ * só o admin grava.
  */
 import { getSetting, saveSetting } from '../models/Setting.js';
 import { audit } from '../models/Audit.js';

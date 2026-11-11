@@ -1,6 +1,6 @@
 /**
  * Aba "Resultados de Provas" do Painel de Uso.
- * Gerente de setor recebe só os próprios setores; suporte recebe todos. Filtro de setor em utils/sectorScope.js.
+ * Gerente de setor recebe só os próprios setores; admin e editor recebem todos. Filtro de setor em utils/sectorScope.js.
  */
 import { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
@@ -118,6 +118,7 @@ export default function ResultadosProvas() {
         <h2>{exam.titulo}</h2>
         <p className="exam-summary">
           <span>{exam.sector_name}</span>
+          {exam.unit_name && exam.unit_name !== 'Todas as unidades' && <span>Unidade: {exam.unit_name}</span>}
           {exam.manual_id && <span>Manual {exam.manual_titulo} · {exam.required ? 'Obrigatória' : 'Não obrigatória'}</span>}
           {exam.assignee_names?.length > 0 && <span>Aplicada para: {exam.assignee_names.join(', ')}</span>}
           <span>{examPeriod(exam)} · {examStatus(exam)}</span>

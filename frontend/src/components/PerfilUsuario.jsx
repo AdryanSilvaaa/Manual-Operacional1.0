@@ -1,11 +1,11 @@
 /**
- * Pop-up "Meu perfil" aberto pelo menu do usuário: nome completo, login, perfil e setores.
+ * Pop-up "Meu perfil" aberto pelo menu do usuário: nome completo, login, perfil, setores e unidades.
  * Os dados são relidos de /api/auth/me ao abrir, para mostrar os setores atuais.
  */
 import { useEffect, useState } from 'react';
-import { Building2, UserRound, X } from 'lucide-react';
+import { Building2, MapPin, UserRound, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { ROLE_LABELS } from '../constants/roles.js';
+import { roleLabel } from '../constants/roles.js';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 
 export default function PerfilUsuario({ onClose }) {
@@ -24,6 +24,7 @@ export default function PerfilUsuario({ onClose }) {
   }, [onClose]);
 
   const sectors = profile?.setores || [];
+  const units = profile?.unidades || [];
 
   return <div className="modal-backdrop" role="presentation" onClick={onClose}>
     <div className="modal-card profile-card" role="dialog" aria-modal="true" aria-labelledby="perfil-titulo" onClick={(event) => event.stopPropagation()}>
@@ -33,11 +34,15 @@ export default function PerfilUsuario({ onClose }) {
       <dl className="profile-details">
         <dt>Nome completo</dt><dd>{profile?.nome}</dd>
         <dt>Usuário</dt><dd>{profile?.identificador || '—'}</dd>
-        <dt>Perfil</dt><dd>{ROLE_LABELS[profile?.role] || profile?.role}</dd>
+        <dt>Perfil</dt><dd>{roleLabel(profile?.role)}</dd>
         <dt>Setores</dt>
         <dd>{sectors.length
           ? <ul className="sector-chips">{sectors.map((sector) => <li key={sector.id}><Building2 size={14} />{sector.nome}</li>)}</ul>
           : 'Nenhum setor vinculado'}</dd>
+        <dt>Unidades</dt>
+        <dd>{units.length
+          ? <ul className="sector-chips">{units.map((unit) => <li key={unit.id}><MapPin size={14} />{unit.nome}</li>)}</ul>
+          : 'Todas as unidades'}</dd>
       </dl>
     </div>
   </div>;

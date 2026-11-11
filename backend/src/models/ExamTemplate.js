@@ -1,10 +1,12 @@
 /**
  * Consultas PostgreSQL dos modelos de prova (exam_templates e exam_template_questions).
  * Regra de acesso: o modelo é do setor de quem o criou; gerente de setor vê só os dos seus setores,
- * suporte e editor de conteúdo veem todos. Para aplicar, a tela Criar Prova copia as perguntas para uma prova nova.
+ * admin e editor de conteúdo veem todos. Aplicar copia as perguntas para uma prova nova (models/Exam.js).
  */
 import { query, withTransaction } from '../config/db.js';
-import { insertQuestions } from './Exam.js';
+import { insertExam, insertQuestions } from './Exam.js';
+import { PERMISSIONS, rolesWith } from '../utils/access.js';
+import { userInUnits } from '../utils/unitSql.js';
 
 const TEMPLATE_COLUMNS = `t.id, t.titulo, t.descricao, t.sector_id, s.nome AS sector_name, t.criado_por, u.nome AS criado_por_nome,
   t.created_at, t.updated_at,
@@ -12,7 +14,7 @@ const TEMPLATE_COLUMNS = `t.id, t.titulo, t.descricao, t.sector_id, s.nome AS se
   (SELECT COUNT(*)::int FROM exams e WHERE e.template_id = t.id) AS applied_count`;
 const TEMPLATE_FROM = `FROM exam_templates t JOIN sectors s ON s.id = t.sector_id LEFT JOIN users u ON u.id = t.criado_por`;
 
-/** sectorIds nulo = todos os setores (suporte e editor de conteúdo). */
+/** sectorIds nulo = todos os setores (admin e editor de conteúdo). */
 export async function listTemplates(sectorIds) {
   const { rows } = await query(
     `SELECT ${TEMPLATE_COLUMNS} ${TEMPLATE_FROM}
@@ -65,4 +67,58 @@ export async function updateTemplate(id, { titulo, descricao, questions }) {
 /** Excluir o modelo não apaga as provas aplicadas: exams.template_id fica nulo (ON DELETE SET NULL). */
 export async function deleteTemplate(id) {
   await query('DELETE FROM exam_templates WHERE id = $1', [id]);
+}
+
+/**
+ * Colaboradores (perfis que fazem prova) do setor do modelo: são os que podem receber a prova.
+ * unitIds limita às unidades de quem aplica (nulo = todas as unidades); unit_names ajuda a escolher.
+ */
+export async function listSectorCollaborators(sectorId, unitIds = null) {
+  const { rows } = await query(
+    `SELECT u.id, u.nome, u.identificador,
+            ARRAY(SELECT un.nome FROM user_units uu JOIN units un ON un.id = uu.unit_id
+                  WHERE uu.user_id = u.id ORDER BY un.nome) AS unit_names
+     FROM users u
+     WHERE u.role = ANY($2::text[]) AND EXISTS (SELECT 1 FROM user_sectors us WHERE us.user_id = u.id AND us.sector_id = $1)
+       AND ($3::int[] IS NULL OR ${userInUnits('u.id', '$3')})
+     ORDER BY u.nome`,
+    [sectorId, rolesWith(PERMISSIONS.TAKE_EXAMS), unitIds]
+  );
+  return rows;
+}
+
+/** Quantos dos ids informados são colaboradores do setor (e das unidades, quando informadas), para recusar quem é de fora. */
+export async function countSectorCollaborators(sectorId, userIds, unitIds = null) {
+  const { rows } = await query(
+    `SELECT COUNT(*)::int AS total FROM users u
+     WHERE u.id = ANY($2::int[]) AND u.role = ANY($3::text[])
+       AND EXISTS (SELECT 1 FROM user_sectors us WHERE us.user_id = u.id AND us.sector_id = $1)
+       AND ($4::int[] IS NULL OR ${userInUnits('u.id', '$4')})`,
+    [sectorId, userIds, rolesWith(PERMISSIONS.TAKE_EXAMS), unitIds]
+  );
+  return rows[0].total;
+}
+
+/**
+ * Cria a prova a partir do modelo, na mesma transação: copia título, descrição e perguntas, usa o setor do modelo
+ * e grava os colaboradores escolhidos (lista vazia = todo o setor). audience "todos" grava a prova sem setor
+ * (sector_id nulo), que é a regra já usada para "todos os setores" nas provas avulsas.
+ * unitId limita a prova a uma unidade (nulo = todas as unidades); com colaboradores escolhidos fica nulo.
+ */
+export async function applyTemplate(template, { startsAt, endsAt, userIds, criadoPor, audience, unitId = null }) {
+  const questions = template.questions.map((question) => ({
+    type: question.type, prompt: question.prompt, options: question.options, correctOption: question.correct_option
+  }));
+  return withTransaction((client) => insertExam(client.query.bind(client), {
+    titulo: template.titulo,
+    descricao: template.descricao,
+    sectorId: audience === 'todos' ? null : template.sector_id,
+    unitId: userIds.length ? null : unitId,
+    criadoPor,
+    startsAt,
+    endsAt,
+    questions,
+    templateId: template.id,
+    assigneeIds: userIds
+  }));
 }

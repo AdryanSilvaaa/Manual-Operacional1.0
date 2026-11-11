@@ -4,13 +4,14 @@
  * Prova do manual (exam_id): liberada ao concluir 100% do conteúdo. Obrigatória abre um aviso que só sai iniciando a prova;
  * não obrigatória abre um aviso com "Fazer depois" e fica disponível no menu Provas.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ClipboardCheck, FileCheck2, PlaySquare } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { ROLES } from '../constants/roles.js';
+import { can, PERMISSIONS } from '../constants/roles.js';
 import BackButton from './BackButton.jsx';
-import PdfReader from './PdfReader.jsx';
+// O leitor de PDF (pdf.js, ~380 KB) só é baixado quando o manual tem PDF; manual só de vídeo abre mais leve.
+const PdfReader = lazy(() => import('./PdfReader.jsx'));
 
 function resolveUrl(apiUrl, url) {
   if (!url) {
@@ -89,8 +90,9 @@ export default function ManualViewer() {
     }
   }
 
+  // Cada página vista vai para o backend, que marca o PDF como lido quando todas as páginas foram visitadas.
   const handlePageViewed = useCallback((page, pageCount) => {
-    saveProgress({ page, pageCount, pdfCompleted: pageCount > 0 && page === pageCount });
+    saveProgress({ page, pageCount });
   }, [saveProgress]);
 
   if (error) {
@@ -102,7 +104,7 @@ export default function ManualViewer() {
   }
 
   // Só o colaborador faz provas; exam_status preenchido = já fez (ou já começou) a prova.
-  const hasExam = Boolean(manual.exam_id) && user?.role === ROLES.USER;
+  const hasExam = Boolean(manual.exam_id) && can(user, PERMISSIONS.TAKE_EXAMS);
   const examPending = hasExam && manual.exam_open && !manual.exam_status;
   const examUnlocked = examPending && Boolean(progress.completed_at);
   const examLabel = manual.exam_required ? 'Prova obrigatória' : 'Prova não obrigatória';
@@ -122,7 +124,9 @@ export default function ManualViewer() {
       </div>
 
       {manual.pdf_url && <>
-        <PdfReader url={resolveUrl(apiUrl, manual.pdf_url)} initialPage={progress.last_page || 1} onPageViewed={handlePageViewed} />
+        <Suspense fallback={<p className="empty-state">Carregando PDF...</p>}>
+          <PdfReader url={resolveUrl(apiUrl, manual.pdf_url)} initialPage={progress.last_page || 1} onPageViewed={handlePageViewed} />
+        </Suspense>
 
         <div className="manual-progress-panel">
           <div><FileCheck2 size={20} /><span>Leitura do PDF</span><strong>{progress.pdf_completed ? 'Concluída' : 'Pendente'}</strong></div>

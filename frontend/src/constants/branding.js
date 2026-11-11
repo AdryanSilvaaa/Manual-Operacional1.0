@@ -1,5 +1,5 @@
 /**
- * Cores e logos que o suporte pode trocar em Configurações > Aparência (white label).
+ * Cores e logos que o admin pode trocar em Configurações > Aparência (white label).
  * Cada cor aponta para uma variável de styles/tokens.css; as chaves precisam bater com backend/src/utils/branding.js.
  * "default" é o valor mostrado no seletor quando nada foi personalizado (igual ao de tokens.css).
  */

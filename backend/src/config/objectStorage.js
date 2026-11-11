@@ -4,12 +4,14 @@
  * No banco fica só a chave do objeto (ex.: videos/uuid.mp4), nunca a URL assinada.
  * Configuração em S3_* no .env; trocar de fornecedor é mudar endpoint, região, bucket e chaves.
  */
+import { randomUUID as uuid } from 'crypto';
 import fs from 'fs';
-import { v4 as uuid } from 'uuid';
 
-const EXTENSIONS = { 'application/pdf': '.pdf', 'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov' };
+// Extensão gravada na chave conforme o tipo do arquivo, e o formato aceito das chaves (pasta/uuid.extensão).
+export const EXTENSIONS = { 'application/pdf': '.pdf', 'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov' };
 const KEY_PATTERN = /^(pdfs|videos)\/[0-9a-f-]{36}\.(pdf|mp4|webm|mov)$/;
 
+// Bucket e validade das URLs assinadas: envio (padrão 10 min) e leitura (padrão 4 h, tempo de assistir um vídeo).
 const bucket = process.env.S3_BUCKET;
 const uploadTtl = Number(process.env.UPLOAD_URL_TTL_SECONDS) || 600;
 const readTtl = Number(process.env.FILE_URL_TTL_SECONDS) || 4 * 60 * 60;
@@ -33,8 +35,10 @@ async function client() {
   return sdk;
 }
 
+/** Diz se o valor salvo no banco é uma chave do bucket (e não um caminho local ou URL antiga). */
 export const isObjectKey = (value) => KEY_PATTERN.test(String(value || ''));
 
+/** Gera um nome único e imprevisível para o arquivo novo, ex.: videos/2f1c...e9.mp4. */
 export function newObjectKey(kind, contentType) {
   return `${kind === 'pdf' ? 'pdfs' : 'videos'}/${uuid()}${EXTENSIONS[contentType] || ''}`;
 }
@@ -52,6 +56,7 @@ export async function createReadUrl(key) {
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key, ResponseContentDisposition: 'inline' }), { expiresIn: readTtl });
 }
 
+/** Tamanho e tipo do arquivo no bucket (null se ele não existe). */
 export async function describeObject(key) {
   const { client: s3, HeadObjectCommand } = await client();
   try {
@@ -63,21 +68,25 @@ export async function describeObject(key) {
   }
 }
 
+/** Baixa o arquivo inteiro para a memória (usado só para conferir e limpar PDFs). */
 export async function readObject(key) {
   const { client: s3, GetObjectCommand } = await client();
   const result = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   return Buffer.from(await result.Body.transformToByteArray());
 }
 
+/** Grava (ou substitui) um arquivo no bucket. */
 export async function writeObject(key, body, contentType, contentLength) {
   const { client: s3, PutObjectCommand } = await client();
   await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType, ContentLength: contentLength }));
 }
 
+/** Envia ao bucket um arquivo do disco temporário sem carregá-lo inteiro na memória. */
 export async function writeObjectFromFile(key, filePath, size, contentType) {
   await writeObject(key, fs.createReadStream(filePath), contentType, size);
 }
 
+/** Apaga o arquivo do bucket; falha é ignorada (o arquivo só fica sobrando). */
 export async function deleteObject(key) {
   const { client: s3, DeleteObjectCommand } = await client();
   await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => {});

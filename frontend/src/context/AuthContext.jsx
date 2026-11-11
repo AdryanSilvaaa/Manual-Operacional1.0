@@ -60,6 +60,12 @@ export function AuthProvider({ children }) {
     return data.user;
   }
 
+  // Recarrega o usuário logado (ex.: depois de trocar a senha provisória, para liberar as telas).
+  async function refreshUser() {
+    const response = await fetch(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (response.ok) setUser(await response.json());
+  }
+
   function logout() {
     localStorage.removeItem('token');
     setToken(null);
@@ -72,7 +78,8 @@ export function AuthProvider({ children }) {
     user,
     loading,
     login,
-    logout
+    logout,
+    refreshUser
   }), [token, user, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

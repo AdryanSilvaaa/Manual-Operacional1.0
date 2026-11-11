@@ -6,6 +6,15 @@
 import 'dotenv/config';
 import app from './app.js';
 import { pool } from './config/db.js';
+import { assertEnv } from './config/env.js';
+
+// Confere o .env antes de abrir a porta: segredo fraco ou variável faltando em produção impede a subida.
+try {
+  assertEnv();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 const port = Number(process.env.PORT) || 4000;
 
@@ -19,6 +28,7 @@ server.headersTimeout = server.keepAliveTimeout + 5000;
 
 let shuttingDown = false;
 
+/** Encerramento gracioso: para de aceitar conexões, termina as que estão em andamento e fecha o banco. */
 function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;

@@ -1,6 +1,6 @@
 /**
  * Editor das perguntas de uma prova (até MAX_QUESTIONS, múltipla escolha A a D ou resposta aberta).
- * Usado em Criar Prova e na prova do manual em Criar Manual. Limites e tipos espelham backend/src/utils/exam.js.
+ * Usado em Modelos de Prova e na prova do manual em Criar Manual. Limites e tipos espelham backend/src/utils/exam.js.
  */
 import { Plus, Trash2 } from 'lucide-react';
 import { MAX_QUESTIONS, OPTION_LETTERS, QUESTION_TYPES } from '../constants/exam.js';

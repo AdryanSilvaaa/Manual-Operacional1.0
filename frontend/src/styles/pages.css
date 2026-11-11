@@ -702,3 +702,47 @@ fieldset > .secondary-button { display: inline-flex; align-items: center; gap: 6
 .template-card { cursor: default; }
 .template-actions { display: flex; flex-wrap: wrap; margin-top: 12px; gap: 8px; }
 .template-actions button { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Explicação dos perfis na tela de usuários: descrição do perfil escolhido e legenda com todos. */
+.role-description {
+  margin: -4px 0 4px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--color-primary);
+  border-radius: 6px;
+  background: var(--color-background);
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.role-description strong { color: var(--color-navy); }
+
+.role-legend {
+  font-size: 13px;
+}
+
+.role-legend summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--color-navy);
+  font-weight: 700;
+}
+
+.role-legend dl {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.role-legend dt {
+  color: var(--color-navy);
+  font-weight: 700;
+}
+
+.role-legend dd {
+  margin: 2px 0 0;
+  color: var(--color-muted);
+  line-height: 1.4;
+}

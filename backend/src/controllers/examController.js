@@ -1,11 +1,10 @@
 /**
- * Criação, realização e resultados das provas.
+ * Realização e resultados das provas. A prova é criada pelo cadastro do manual ou ao aplicar um modelo
+ * (controllers/manualController.js e controllers/examTemplateController.js).
  * Regras de validação e correção ficam em utils/exam.js; SQL em models/Exam.js.
  */
 import { demoStore, shouldUseDemoStore } from '../config/demoStore.js';
 import {
-  countSectorCollaborators,
-  createExam,
   findExamById,
   findSubmission,
   finishSubmission,
@@ -14,14 +13,10 @@ import {
   listAvailableExams,
   listExamQuestions,
   listExamResults,
-  listSectorCollaborators,
   startSubmission
 } from '../models/Exam.js';
-import { findSectorById } from '../models/Sector.js';
-import { SUBMISSION_STATUS, gradeSubmission, isExamOpen, parseId, validateExamPayload } from '../utils/exam.js';
-import { getTemplate } from '../models/ExamTemplate.js';
-import { canUseTemplate } from './examTemplateController.js';
-import { hasSector, seesAllSectors } from '../utils/access.js';
+import { SUBMISSION_STATUS, gradeSubmission, isExamOpen } from '../utils/exam.js';
+import { can, hasSector, hasUnit, PERMISSIONS } from '../utils/access.js';
 
 /** Executa no PostgreSQL e, só no modo demonstração sem banco, usa a memória. */
 async function withDemo(databaseCall, demoCall) {
@@ -33,64 +28,9 @@ async function withDemo(databaseCall, demoCall) {
   }
 }
 
-/**
- * Define o setor da prova: suporte e editor de conteúdo escolhem um setor ou todos (sectorId vazio ou "todos" = null);
- * gerente de setor escolhe um dos seus setores (se tiver só um, ele é usado automaticamente).
- */
-async function resolveExamSector(req) {
-  if (seesAllSectors(req.user)) {
-    const chosen = req.body?.sectorId;
-    if (chosen === undefined || chosen === null || chosen === '' || chosen === 'todos') return { sectorId: null };
-    const sector = await findSectorById(Number(chosen));
-    return sector ? { sectorId: sector.id } : { error: 'Setor não encontrado' };
-  }
-  const ownSectors = req.user.sector_ids || [];
-  if (!ownSectors.length) {
-    return { error: 'Seu usuário não está vinculado a um setor. Peça ao suporte para definir o setor antes de criar a prova.' };
-  }
-  const chosen = req.body?.sectorId;
-  if (chosen === undefined || chosen === null || chosen === '' || chosen === 'todos') {
-    return ownSectors.length === 1 ? { sectorId: ownSectors[0] } : { error: 'Escolha o setor da prova' };
-  }
-  return hasSector(req.user, chosen) ? { sectorId: Number(chosen) } : { error: 'Você só pode criar provas para os seus setores' };
-}
-
-export async function store(req, res) {
-  const { error, exam } = validateExamPayload(req.body);
-  if (error) return res.status(400).json({ message: error });
-  const sector = await resolveExamSector(req);
-  if (sector.error) return res.status(400).json({ message: sector.error });
-
-  // Prova montada a partir de um modelo (Criar Prova > Usar modelo): guarda a origem se o modelo for do setor do usuário.
-  const templateId = parseId(req.body?.templateId);
-  if (templateId && !canUseTemplate(req.user, await getTemplate(templateId))) {
-    return res.status(400).json({ message: 'Modelo de prova não encontrado ou sem permissão' });
-  }
-  // Para colaboradores específicos (ex.: quem acabou de entrar): só vale com um setor escolhido e só para quem é dele.
-  const { userIds, ...fields } = exam;
-  if (userIds.length) {
-    if (!sector.sectorId) return res.status(400).json({ message: 'Para escolher colaboradores, escolha um setor' });
-    const valid = await withDemo(() => countSectorCollaborators(sector.sectorId, userIds), () => null);
-    if (valid === null) return res.status(400).json({ message: 'O modo demonstração não permite escolher colaboradores' });
-    if (valid !== userIds.length) return res.status(400).json({ message: 'Escolha apenas colaboradores do setor da prova' });
-  }
-  const data = { ...fields, sectorId: sector.sectorId, criadoPor: req.user.id, templateId, assigneeIds: userIds };
-  const created = await withDemo(() => createExam(data), () => demoStore.createExam(data));
-  res.status(201).json(created);
-}
-
-/** Colaboradores de um setor que podem receber a prova (Criar Prova > Para quem). Gerente só consulta os seus setores. */
-export async function collaborators(req, res) {
-  const sectorId = parseId(req.query.sectorId);
-  if (!sectorId || (!seesAllSectors(req.user) && !hasSector(req.user, sectorId))) {
-    return res.status(404).json({ message: 'Setor não encontrado ou sem permissão' });
-  }
-  res.json(await withDemo(() => listSectorCollaborators(sectorId), () => []));
-}
-
-// Só colaboradores (perfil usuario) recebem provas para responder.
+// Só perfis com a permissão de fazer prova (usuário comum e administrador de cadastros) recebem provas.
 export async function available(req, res) {
-  if (req.user.role !== 'usuario') return res.json([]);
+  if (!can(req.user, PERMISSIONS.TAKE_EXAMS)) return res.json([]);
   res.json(await withDemo(() => listAvailableExams(req.user), () => demoStore.listAvailableExams(req.user)));
 }
 
@@ -122,10 +62,14 @@ async function loadExamForCollaborator(req, res, { inProgress = false } = {}) {
   const assignment = exam && !exam.manual_id
     ? await withDemo(() => getExamAssignment(exam.id, req.user.id), () => ({ hasAssignees: false, isAssignee: false }))
     : null;
+  // Prova avulsa sem colaboradores escolhidos: setor da prova (ou todos) e unidade da prova (ou todas).
   const sameSector = manualAccess
     ? manualAccess.hasAccess
-    : assignment?.hasAssignees ? assignment.isAssignee : exam?.sector_id === null || hasSector(req.user, exam?.sector_id);
-  if (!exam || req.user.role !== 'usuario' || !sameSector) {
+    : assignment?.hasAssignees
+      ? assignment.isAssignee
+      : (exam?.sector_id === null || hasSector(req.user, exam?.sector_id))
+        && (exam?.unit_id === null || exam?.unit_id === undefined || hasUnit(req.user, exam.unit_id));
+  if (!exam || !can(req.user, PERMISSIONS.TAKE_EXAMS) || !sameSector) {
     res.status(404).json({ message: 'Prova não encontrada ou sem permissão' });
     return null;
   }

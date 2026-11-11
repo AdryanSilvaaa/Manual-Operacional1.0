@@ -1,3 +1,7 @@
+/**
+ * Botão "Voltar" das telas internas. Volta pelo histórico do navegador; se a pessoa abriu a tela direto
+ * (link ou F5), não há histórico e ele leva para a rota fallback.
+ */
 import { ArrowLeft } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 

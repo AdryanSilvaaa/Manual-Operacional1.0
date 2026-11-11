@@ -1,18 +1,20 @@
 /**
  * Edição, ativação e exclusão dos manuais já publicados (inclusive os inativos).
  * Quem pode alterar cada manual é decidido no backend (utils/access.js, canManageManual):
- * suporte e editor de conteúdo alteram todos; gerente de setor só os manuais que são apenas dos seus setores.
+ * admin e editor de conteúdo alteram todos; gerente de setor só os manuais que são apenas dos seus setores
+ * e das suas unidades (ou de todas as unidades).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, EyeOff, Pencil, Save, Trash2, Undo2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { ROLES } from '../constants/roles.js';
+import { can, PERMISSIONS } from '../constants/roles.js';
 import { createAuthHeaders, readResponse } from '../utils/api.js';
 import { matchesSearch } from '../utils/search.js';
 import BackButton from '../components/BackButton.jsx';
 import SearchField from '../components/SearchField.jsx';
 import SectorPicker from '../components/SectorPicker.jsx';
+import UnitScopePicker, { unitNamesLabel, unitScopeOf } from '../components/UnitScopePicker.jsx';
 import { MAX_PDF_MB, MAX_VIDEO_MB, MAX_VIDEO_MINUTES, validateManualFile } from '../constants/uploads.js';
 import { buildManualRequest, getUploadConfig } from '../utils/directUpload.js';
 
@@ -29,6 +31,7 @@ export default function GerenciarManuais() {
   const [manuals, setManuals] = useState([]);
   const [systems, setSystems] = useState([]);
   const [sectors, setSectors] = useState([]);
+  const [units, setUnits] = useState([]);
   const [directUpload, setDirectUpload] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const toast = useToast();
@@ -36,9 +39,10 @@ export default function GerenciarManuais() {
   const [editing, setEditing] = useState(null);
   const [sending, setSending] = useState('');
   const formRef = useRef(null);
-  const isSectorManager = user?.role === ROLES.SECTOR_MANAGER;
+  const isSectorManager = !can(user, PERMISSIONS.ALL_SECTORS);
   const sectorOptions = isSectorManager ? user?.setores || [] : sectors;
   const fixedSector = isSectorManager && sectorOptions.length <= 1;
+  const unitOptions = can(user, PERMISSIONS.ALL_UNITS) ? units : user?.unidades || [];
 
   async function loadManuals() {
     const response = await fetch(`${apiUrl}/api/manuals/manage`, { headers: createAuthHeaders(token) });
@@ -48,11 +52,12 @@ export default function GerenciarManuais() {
   useEffect(() => {
     async function loadAll() {
       const headers = createAuthHeaders(token);
-      const [systemsResponse, sectorsResponse] = await Promise.all([
-        fetch(`${apiUrl}/api/systems`, { headers }), fetch(`${apiUrl}/api/sectors`, { headers })
+      const [systemsResponse, sectorsResponse, unitsResponse] = await Promise.all([
+        fetch(`${apiUrl}/api/systems`, { headers }), fetch(`${apiUrl}/api/sectors`, { headers }), fetch(`${apiUrl}/api/units`, { headers })
       ]);
       setSystems(await readResponse(systemsResponse));
       setSectors(await readResponse(sectorsResponse));
+      setUnits(await readResponse(unitsResponse));
       setDirectUpload(Boolean((await getUploadConfig(apiUrl, token)).directUpload));
       await loadManuals();
     }
@@ -60,7 +65,7 @@ export default function GerenciarManuais() {
   }, [apiUrl, token, toast]);
 
   const filtered = useMemo(
-    () => manuals.filter((manual) => matchesSearch(`${manual.titulo} ${manual.system_name || ''} ${(manual.sector_names || []).join(' ')}`, searchTerm)),
+    () => manuals.filter((manual) => matchesSearch(`${manual.titulo} ${manual.system_name || ''} ${(manual.sector_names || []).join(' ')} ${unitNamesLabel(manual.unit_names)}`, searchTerm)),
     [manuals, searchTerm]
   );
 
@@ -69,7 +74,7 @@ export default function GerenciarManuais() {
   function startEdit(manual) {
     setEditing({
       id: manual.id, titulo: manual.titulo, descricao: manual.descricao || '', systemId: String(manual.system_id || ''),
-      sectorIds: manual.sector_ids || [], hasPdf: manual.has_pdf, hasVideo: manual.has_video, pdf: null, video: null,
+      sectorIds: manual.sector_ids || [], ...unitScopeOf(manual.unit_ids || []), hasPdf: manual.has_pdf, hasVideo: manual.has_video, pdf: null, video: null,
       removePdf: false, removeVideo: false
     });
   }
@@ -116,15 +121,19 @@ export default function GerenciarManuais() {
       toast.error('Selecione pelo menos um setor.');
       return;
     }
+    if (editing.unitScope === 'selecionadas' && !editing.unitIds.length) {
+      toast.error('Selecione pelo menos uma unidade ou marque Todas as unidades.');
+      return;
+    }
     const removed = [editing.removePdf && 'o PDF', editing.removeVideo && 'o vídeo'].filter(Boolean).join(' e ');
     if (removed && !window.confirm(`Remover ${removed} do manual "${editing.titulo}"?\n\nO arquivo é apagado do armazenamento e isso não pode ser desfeito. O progresso dos colaboradores na parte que fica é mantido.`)) return;
     setSending('Salvando...');
     try {
-      const { id, titulo, descricao, systemId, sectorIds, pdf, video, removePdf, removeVideo } = editing;
+      const { id, titulo, descricao, systemId, sectorIds, unitScope, unitIds, pdf, video, removePdf, removeVideo } = editing;
       // Campos de remoção só vão quando marcados.
       const removal = { removePdf: removePdf || undefined, removeVideo: removeVideo || undefined };
       const { headers, body } = await buildManualRequest({
-        apiUrl, token, directUpload, fields: { titulo, descricao, systemId, sectorIds, ...removal }, pdf, video, onStatus: setSending
+        apiUrl, token, directUpload, fields: { titulo, descricao, systemId, sectorIds, unitScope, unitIds, ...removal }, pdf, video, onStatus: setSending
       });
       await readResponse(await fetch(`${apiUrl}/api/manuals/${id}`, { method: 'PUT', headers, body }));
       setEditing(null);
@@ -168,6 +177,7 @@ export default function GerenciarManuais() {
         <SectorPicker sectors={sectorOptions} value={editing.sectorIds} onChange={(value) => setEditing({ ...editing, sectorIds: value })} allLabel={isSectorManager ? 'Todos os meus setores' : 'Todos os setores'} />
         <span className="hint">O manual aparece para quem for de qualquer um dos setores marcados.</span>
       </fieldset>}
+      <UnitScopePicker units={unitOptions} totalUnits={units.length} value={editing} onChange={(scope) => setEditing({ ...editing, ...scope })} name="edit-unit-scope" />
       <label>Título<input value={editing.titulo} onChange={(event) => setEditing({ ...editing, titulo: event.target.value })} required /></label>
       <label>Descrição<textarea value={editing.descricao} onChange={(event) => setEditing({ ...editing, descricao: event.target.value })} /></label>
       {renderFileField('pdf')}
@@ -180,13 +190,14 @@ export default function GerenciarManuais() {
     </form>}
 
     <div className="dashboard-panel admin-panel">
-      <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Pesquisar por título, sistema ou setor" label="Pesquisar manuais" id="manage-manuals-search" />
-      {isSectorManager && <p className="hint">Aparecem aqui os manuais que são apenas dos seus setores. Manuais compartilhados com outros setores são alterados pelo suporte ou pelo editor de conteúdo.</p>}
-      {filtered.length ? <div className="report-table-wrap"><table className="report-table manage-table"><thead><tr><th>Título</th><th>Sistema</th><th>Setores</th><th>Arquivos</th><th>Situação</th><th>Ações</th></tr></thead><tbody>
+      <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="Pesquisar por título, sistema, setor ou unidade" label="Pesquisar manuais" id="manage-manuals-search" />
+      {isSectorManager && <p className="hint">Aparecem aqui os manuais que são apenas dos seus setores e das suas unidades (ou de todas as unidades). Manuais compartilhados com outros setores ou unidades são alterados pelo Admin ou pelo editor de conteúdo.</p>}
+      {filtered.length ? <div className="report-table-wrap"><table className="report-table manage-table"><thead><tr><th>Título</th><th>Sistema</th><th>Setores</th>{units.length > 1 && <th>Unidades</th>}<th>Arquivos</th><th>Situação</th><th>Ações</th></tr></thead><tbody>
         {filtered.map((manual) => <tr key={manual.id}>
           <td className="wrap"><strong>{manual.titulo}</strong>{manual.version > 1 && <span className="hint"> · versão {manual.version}</span>}</td>
           <td>{manual.system_name || '—'}</td>
           <td className="wrap">{(manual.sector_names || []).join(', ')}</td>
+          {units.length > 1 && <td className="wrap">{unitNamesLabel(manual.unit_names)}</td>}
           <td>{filesOf(manual)}</td>
           <td><span className={`status-pill ${manual.active ? 'status-concluido' : 'status-nao-iniciado'}`}>{manual.active ? 'Ativo' : 'Inativo'}</span></td>
           <td><div className="row-actions">

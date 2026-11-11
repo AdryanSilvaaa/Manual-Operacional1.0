@@ -43,9 +43,16 @@ export async function readTextFile(file) {
   }
 }
 
-/** Gera e baixa um CSV que o Excel abre direto, com acentos. */
+// Proteção contra "injeção de fórmula": um nome digitado como =HYPERLINK(...) viraria fórmula ao abrir no Excel.
+// Células que começam com = + @ (ou - seguido de algo que não é número) ganham um apóstrofo na frente.
+function safeCell(value) {
+  const text = String(value ?? '');
+  return /^[=+@\t\r]|^-(?![\d.])/.test(text) ? `'${text}` : text;
+}
+
+/** Gera e baixa um CSV que o Excel abre direto, com acentos. rows = lista de linhas, cada linha uma lista de células. */
 export function downloadCsv(fileName, rows) {
-  const csv = rows.map((line) => line.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(';')).join('\r\n');
+  const csv = rows.map((line) => line.map((value) => `"${safeCell(value).replaceAll('"', '""')}"`).join(';')).join('\r\n');
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' }));
   link.download = fileName;
